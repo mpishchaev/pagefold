@@ -62,7 +62,11 @@ export class ScreenshotEditor {
     // Crop State
     this.cropRect = null; // { x, y, width, height }
     this.isCropping = false;
-    this.cropHandle = null;
+    this.activeCropHandle = null;
+    this.cropStartRect = null;
+    this.cropStartX = 0;
+    this.cropStartY = 0;
+    this.cropAspectRatio = null; // null | 1 | 16/9 | 4/3
 
     // Setup event listeners
     this.initEvents();
@@ -215,13 +219,35 @@ export class ScreenshotEditor {
   initEvents() {
     const getPos = (e) => {
       const rect = this.overlayCanvas.getBoundingClientRect();
-      const scaleX = this.overlayCanvas.width / rect.width;
-      const scaleY = this.overlayCanvas.height / rect.height;
+      const scaleX = rect.width > 0 ? (this.overlayCanvas.width / rect.width) : 1;
+      const scaleY = rect.height > 0 ? (this.overlayCanvas.height / rect.height) : 1;
       return {
         x: (e.clientX - rect.left) * scaleX,
         y: (e.clientY - rect.top) * scaleY
       };
     };
+
+    // Update cursor when hovering over crop handles
+    this.overlayCanvas.addEventListener('mousemove', (e) => {
+      if (this.isDrawing || this.activeTool !== 'crop' || !this.cropRect) return;
+      const pos = getPos(e);
+      const handle = this.getCropHitHandle(pos);
+
+      const cursorMap = {
+        nw: 'nwse-resize',
+        se: 'nwse-resize',
+        ne: 'nesw-resize',
+        sw: 'nesw-resize',
+        n: 'ns-resize',
+        s: 'ns-resize',
+        w: 'ew-resize',
+        e: 'ew-resize',
+        move: 'move',
+        new: 'crosshair'
+      };
+
+      this.overlayCanvas.style.cursor = cursorMap[handle] || 'default';
+    });
 
     this.overlayCanvas.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;
@@ -446,31 +472,139 @@ export class ScreenshotEditor {
   }
 
   /**
+   * Helper: Get current scale ratio between canvas internal pixels and screen pixels
+   */
+  getScaleRatio() {
+    const rect = this.overlayCanvas.getBoundingClientRect();
+    return rect.width > 0 ? (this.overlayCanvas.width / rect.width) : 1;
+  }
+
+  /**
+   * Helper: Normalize rectangle to positive width/height
+   */
+  normalizeRect(r) {
+    if (!r) return { x: 0, y: 0, width: 0, height: 0 };
+    let { x, y, width, height } = r;
+    if (width < 0) {
+      x += width;
+      width = Math.abs(width);
+    }
+    if (height < 0) {
+      y += height;
+      height = Math.abs(height);
+    }
+    return {
+      x: Math.round(x),
+      y: Math.round(y),
+      width: Math.round(width),
+      height: Math.round(height)
+    };
+  }
+
+  /**
+   * Helper: Hit-test mouse position against crop handles, box interior, or outside
+   */
+  getCropHitHandle(pos) {
+    if (!this.cropRect) return 'new';
+    const norm = this.normalizeRect(this.cropRect);
+    const scaleRatio = this.getScaleRatio();
+    // Hit distance in canvas units: ~18 screen pixels
+    const hitDist = Math.max(12, Math.round(18 * scaleRatio));
+
+    const handles = {
+      nw: { x: norm.x, y: norm.y },
+      ne: { x: norm.x + norm.width, y: norm.y },
+      se: { x: norm.x + norm.width, y: norm.y + norm.height },
+      sw: { x: norm.x, y: norm.y + norm.height },
+      n:  { x: norm.x + norm.width / 2, y: norm.y },
+      s:  { x: norm.x + norm.width / 2, y: norm.y + norm.height },
+      w:  { x: norm.x, y: norm.y + norm.height / 2 },
+      e:  { x: norm.x + norm.width, y: norm.y + norm.height / 2 }
+    };
+
+    for (const [name, pt] of Object.entries(handles)) {
+      if (Math.hypot(pos.x - pt.x, pos.y - pt.y) <= hitDist) {
+        return name;
+      }
+    }
+
+    if (pos.x >= norm.x && pos.x <= norm.x + norm.width &&
+        pos.y >= norm.y && pos.y <= norm.y + norm.height) {
+      return 'move';
+    }
+
+    return 'new';
+  }
+
+  /**
    * Crop Mode
    */
   startCrop() {
     this.isCropping = true;
-    const padding = 20;
+    const padX = Math.round(this.baseCanvas.width * 0.05);
+    const padY = Math.round(this.baseCanvas.height * 0.05);
     this.cropRect = {
-      x: padding,
-      y: padding,
-      width: this.baseCanvas.width - (padding * 2),
-      height: this.baseCanvas.height - (padding * 2)
+      x: padX,
+      y: padY,
+      width: Math.max(20, this.baseCanvas.width - padX * 2),
+      height: Math.max(20, this.baseCanvas.height - padY * 2)
     };
+    if (this.cropAspectRatio) {
+      this.applyCropAspectRatio();
+    }
     this.renderOverlay();
   }
 
-  applyCrop() {
-    if (!this.cropRect) return;
+  setCropAspectRatio(ratio) {
+    this.cropAspectRatio = ratio;
+    if (this.cropRect && ratio) {
+      this.applyCropAspectRatio();
+      this.renderOverlay();
+    }
+  }
 
-    const { x, y, width, height } = this.cropRect;
-    if (width <= 10 || height <= 10) return;
+  applyCropAspectRatio() {
+    if (!this.cropRect || !this.cropAspectRatio) return;
+    const ratio = this.cropAspectRatio;
+    const norm = this.normalizeRect(this.cropRect);
+    let w = norm.width;
+    let h = Math.round(w / ratio);
+
+    if (norm.y + h > this.baseCanvas.height) {
+      h = this.baseCanvas.height - norm.y;
+      w = Math.round(h * ratio);
+    }
+    if (norm.x + w > this.baseCanvas.width) {
+      w = this.baseCanvas.width - norm.x;
+      h = Math.round(w / ratio);
+    }
+
+    this.cropRect = {
+      x: norm.x,
+      y: norm.y,
+      width: Math.max(10, w),
+      height: Math.max(10, h)
+    };
+  }
+
+  applyCrop() {
+    if (!this.cropRect) return null;
+
+    const norm = this.normalizeRect(this.cropRect);
+    let { x, y, width, height } = norm;
+
+    x = Math.max(0, Math.round(x));
+    y = Math.max(0, Math.round(y));
+    width = Math.min(this.baseCanvas.width - x, Math.round(width));
+    height = Math.min(this.baseCanvas.height - y, Math.round(height));
+
+    if (width < 5 || height < 5) return null;
 
     // Merge base + annotations into temporary canvas to crop everything uniformly
     const merged = this.getMergedCanvas();
     const cropped = document.createElement('canvas');
-    cropped.width = Math.round(width);
-    cropped.height = Math.round(height);
+    cropped.width = width;
+    cropped.height = height;
 
     const ctx = cropped.getContext('2d');
     ctx.drawImage(
@@ -479,55 +613,129 @@ export class ScreenshotEditor {
       0, 0, width, height
     );
 
-    this.baseCanvas.width = cropped.width;
-    this.baseCanvas.height = cropped.height;
-    this.overlayCanvas.width = cropped.width;
-    this.overlayCanvas.height = cropped.height;
+    this.baseCanvas.width = width;
+    this.baseCanvas.height = height;
+    this.overlayCanvas.width = width;
+    this.overlayCanvas.height = height;
 
-    this.baseCtx.clearRect(0, 0, cropped.width, cropped.height);
+    this.baseCtx.clearRect(0, 0, width, height);
     this.baseCtx.drawImage(cropped, 0, 0);
 
     this.annotations = [];
     this.isCropping = false;
     this.cropRect = null;
     this.activeTool = 'select';
+    this.overlayCanvas.style.cursor = 'default';
 
     this.saveState();
     this.renderOverlay();
+
+    return { width, height };
   }
 
   cancelCrop() {
     this.isCropping = false;
     this.cropRect = null;
     this.activeTool = 'select';
+    this.overlayCanvas.style.cursor = 'default';
     this.renderOverlay();
   }
 
   handleCropMouseDown(pos) {
-    // Check if dragging inside crop box to move, or dragging handles to resize
+    const handle = this.getCropHitHandle(pos);
+    this.activeCropHandle = handle;
     this.cropStartX = pos.x;
     this.cropStartY = pos.y;
-    this.origCropRect = { ...this.cropRect };
+
+    if (handle === 'new') {
+      this.cropRect = { x: pos.x, y: pos.y, width: 0, height: 0 };
+      this.cropStartRect = { ...this.cropRect };
+    } else {
+      this.cropStartRect = this.normalizeRect(this.cropRect);
+      this.cropRect = { ...this.cropStartRect };
+    }
   }
 
   handleCropMouseMove(pos) {
-    if (!this.origCropRect) return;
+    if (!this.activeCropHandle || !this.cropStartRect) return;
+
     const dx = pos.x - this.cropStartX;
     const dy = pos.y - this.cropStartY;
+    const orig = this.cropStartRect;
+    const canvasW = this.baseCanvas.width;
+    const canvasH = this.baseCanvas.height;
 
-    // Update crop rectangle
-    this.cropRect = {
-      x: Math.max(0, Math.min(this.baseCanvas.width - 20, this.origCropRect.x + dx)),
-      y: Math.max(0, Math.min(this.baseCanvas.height - 20, this.origCropRect.y + dy)),
-      width: this.origCropRect.width,
-      height: this.origCropRect.height
-    };
+    let newX = orig.x;
+    let newY = orig.y;
+    let newW = orig.width;
+    let newH = orig.height;
+
+    if (this.activeCropHandle === 'move') {
+      newX = Math.max(0, Math.min(canvasW - orig.width, orig.x + dx));
+      newY = Math.max(0, Math.min(canvasH - orig.height, orig.y + dy));
+      this.cropRect = { x: newX, y: newY, width: orig.width, height: orig.height };
+    } else if (this.activeCropHandle === 'new') {
+      const x1 = Math.max(0, Math.min(canvasW, Math.min(this.cropStartX, pos.x)));
+      const y1 = Math.max(0, Math.min(canvasH, Math.min(this.cropStartY, pos.y)));
+      const x2 = Math.max(0, Math.min(canvasW, Math.max(this.cropStartX, pos.x)));
+      const y2 = Math.max(0, Math.min(canvasH, Math.max(this.cropStartY, pos.y)));
+
+      let w = x2 - x1;
+      let h = y2 - y1;
+      if (this.cropAspectRatio) {
+        h = Math.round(w / this.cropAspectRatio);
+        if (y1 + h > canvasH) {
+          h = canvasH - y1;
+          w = Math.round(h * this.cropAspectRatio);
+        }
+      }
+      this.cropRect = { x: x1, y: y1, width: w, height: h };
+    } else {
+      // Handle corner and edge resizing
+      if (this.activeCropHandle.includes('e')) {
+        newW = Math.max(10, Math.min(canvasW - orig.x, orig.width + dx));
+      }
+      if (this.activeCropHandle.includes('s')) {
+        newH = Math.max(10, Math.min(canvasH - orig.y, orig.height + dy));
+      }
+      if (this.activeCropHandle.includes('w')) {
+        const potentialX = orig.x + dx;
+        const clampedX = Math.max(0, Math.min(orig.x + orig.width - 10, potentialX));
+        newW = orig.width - (clampedX - orig.x);
+        newX = clampedX;
+      }
+      if (this.activeCropHandle.includes('n')) {
+        const potentialY = orig.y + dy;
+        const clampedY = Math.max(0, Math.min(orig.y + orig.height - 10, potentialY));
+        newH = orig.height - (clampedY - orig.y);
+        newY = clampedY;
+      }
+
+      // If aspect ratio is locked
+      if (this.cropAspectRatio) {
+        if (this.activeCropHandle.includes('e') || this.activeCropHandle.includes('w')) {
+          newH = Math.round(newW / this.cropAspectRatio);
+        } else {
+          newW = Math.round(newH * this.cropAspectRatio);
+        }
+      }
+
+      this.cropRect = { x: newX, y: newY, width: newW, height: newH };
+    }
 
     this.renderOverlay();
   }
 
   handleCropMouseUp() {
-    this.origCropRect = null;
+    if (this.cropRect) {
+      this.cropRect = this.normalizeRect(this.cropRect);
+      if (this.cropRect.width < 10 || this.cropRect.height < 10) {
+        this.startCrop();
+      }
+    }
+    this.activeCropHandle = null;
+    this.cropStartRect = null;
+    this.renderOverlay();
   }
 
   /**
@@ -628,56 +836,89 @@ export class ScreenshotEditor {
   }
 
   drawCropOverlay(ctx) {
-    const { x, y, width, height } = this.cropRect;
+    if (!this.cropRect) return;
+
+    const norm = this.normalizeRect(this.cropRect);
+    const { x, y, width, height } = norm;
     const w = this.overlayCanvas.width;
     const h = this.overlayCanvas.height;
 
-    // Dim outside
+    // Dim outside crop box
     ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
     ctx.fillRect(0, 0, w, y);
     ctx.fillRect(0, y + height, w, h - (y + height));
     ctx.fillRect(0, y, x, height);
     ctx.fillRect(x + width, y, w - (x + width), height);
 
+    const scaleRatio = this.getScaleRatio();
+
     // Crop border
     ctx.strokeStyle = '#38BDF8';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 6]);
+    ctx.lineWidth = Math.max(1.5, Math.round(2 * scaleRatio));
+    ctx.setLineDash([Math.round(6 * scaleRatio), Math.round(4 * scaleRatio)]);
     ctx.strokeRect(x, y, width, height);
 
-    // Grid rule of thirds
+    // Rule of thirds grid
     ctx.setLineDash([]);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x + width / 3, y, width / 3, height);
-    ctx.strokeRect(x, y + height / 3, width, height / 3);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+    ctx.lineWidth = Math.max(1, Math.round(1 * scaleRatio));
 
-    // Corner & edge handles
-    const handleSize = 10;
+    ctx.beginPath();
+    ctx.moveTo(x + width / 3, y);
+    ctx.lineTo(x + width / 3, y + height);
+    ctx.moveTo(x + (width * 2) / 3, y);
+    ctx.lineTo(x + (width * 2) / 3, y + height);
+    ctx.moveTo(x, y + height / 3);
+    ctx.lineTo(x + width, y + height / 3);
+    ctx.moveTo(x, y + (height * 2) / 3);
+    ctx.lineTo(x + width, y + (height * 2) / 3);
+    ctx.stroke();
+
+    // Corner & edge circular handles
+    const handleRadius = Math.max(5, Math.round(6.5 * scaleRatio));
     ctx.fillStyle = '#FFFFFF';
     ctx.strokeStyle = '#0284C7';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = Math.max(1.5, Math.round(2 * scaleRatio));
 
     const handles = [
-      [x, y], [x + width / 2, y], [x + width, y],
-      [x, y + height / 2], [x + width, y + height / 2],
-      [x, y + height], [x + width / 2, y + height], [x + width, y + height]
+      [x, y],
+      [x + width / 2, y],
+      [x + width, y],
+      [x + width, y + height / 2],
+      [x + width, y + height],
+      [x + width / 2, y + height],
+      [x, y + height],
+      [x, y + height / 2]
     ];
 
     for (const [hx, hy] of handles) {
-      ctx.fillRect(hx - handleSize / 2, hy - handleSize / 2, handleSize, handleSize);
-      ctx.strokeRect(hx - handleSize / 2, hy - handleSize / 2, handleSize, handleSize);
+      ctx.beginPath();
+      ctx.arc(hx, hy, handleRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
     }
 
     // Size badge
-    ctx.font = 'bold 12px sans-serif';
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-    const text = `${Math.round(width)} × ${Math.round(height)} px`;
-    const tw = ctx.measureText(text).width + 16;
-    ctx.fillRect(x + 10, y + 10, tw, 24);
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillText(text, x + 18, y + 26);
+    const badgeFontSize = Math.max(11, Math.round(12 * scaleRatio));
+    ctx.font = `bold ${badgeFontSize}px sans-serif`;
+    const text = `${width} × ${height} px`;
+    const textW = ctx.measureText(text).width;
+    const badgePadX = Math.round(10 * scaleRatio);
+    const badgePadY = Math.round(6 * scaleRatio);
+    const badgeW = textW + badgePadX * 2;
+    const badgeH = badgeFontSize + badgePadY * 2;
+
+    const badgeY = y > badgeH + 6 ? y - badgeH - 6 : y + 8;
+    const badgeX = Math.min(w - badgeW - 6, Math.max(6, x + 8));
+
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+    ctx.fillRect(badgeX, badgeY, badgeW, badgeH);
+
+    ctx.fillStyle = '#38BDF8';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(text, badgeX + badgePadX, badgeY + badgePadY);
 
     ctx.restore();
   }

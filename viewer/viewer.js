@@ -377,11 +377,41 @@ function setupEditorToolEvents() {
     }
   });
 
-  // Crop Controls
-  btnApplyCrop?.addEventListener('click', () => {
-    editor.applyCrop();
-    cropActionsBar.classList.add('hidden');
-    highlightActiveTool('select');
+  // Crop Controls & Aspect Ratio Presets
+  const cropPresetButtons = document.querySelectorAll('.btn-crop-preset[data-ratio]');
+  cropPresetButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      cropPresetButtons.forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      const ratioStr = btn.dataset.ratio;
+      let ratio = null;
+      if (ratioStr === '1:1') ratio = 1;
+      else if (ratioStr === '16:9') ratio = 16 / 9;
+      else if (ratioStr === '4:3') ratio = 4 / 3;
+      editor.setCropAspectRatio(ratio);
+    });
+  });
+
+  document.getElementById('btn-reset-crop')?.addEventListener('click', () => {
+    editor.startCrop();
+  });
+
+  btnApplyCrop?.addEventListener('click', async () => {
+    const cropped = editor.applyCrop();
+    if (cropped) {
+      cropActionsBar.classList.add('hidden');
+      highlightActiveTool('select');
+
+      if (currentCapture) {
+        currentCapture.dimensions = { width: cropped.width, height: cropped.height };
+        currentCapture.dataUrl = editor.getExportDataUrl('png');
+        await saveCapture(currentCapture);
+      }
+
+      if (docDims) docDims.textContent = `${cropped.width} × ${cropped.height} px`;
+      fitToScreen();
+      showToast('Image cropped successfully! ✂️');
+    }
   });
 
   btnCancelCrop?.addEventListener('click', () => {

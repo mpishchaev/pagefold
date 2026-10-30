@@ -451,6 +451,44 @@ html, body {
   margin-left: auto;
 }
 
+.crop-preset-group {
+  display: flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  gap: 2px;
+}
+
+.btn-crop-preset {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-crop-preset:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.btn-crop-preset.active {
+  background: var(--accent-cyan);
+  color: #0F172A;
+  font-weight: 700;
+}
+
+#btn-reset-crop {
+  border-color: var(--border);
+  padding: 4px 10px;
+}
+
 .btn-crop-confirm {
   background: #0284C7;
   color: #FFFFFF;

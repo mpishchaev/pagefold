@@ -248,6 +248,13 @@
 
     <!-- Crop Apply/Cancel Bar -->
     <div id="crop-actions-bar" class="crop-actions-bar hidden">
+      <div class="crop-preset-group">
+        <button class="btn-crop-preset active" data-ratio="free" title="Free crop">Free</button>
+        <button class="btn-crop-preset" data-ratio="1:1" title="Square (1:1)">1:1</button>
+        <button class="btn-crop-preset" data-ratio="16:9" title="Widescreen (16:9)">16:9</button>
+        <button class="btn-crop-preset" data-ratio="4:3" title="Standard (4:3)">4:3</button>
+      </div>
+      <button id="btn-reset-crop" class="btn-crop-preset" title="Reset crop to full canvas">Reset</button>
       <button id="btn-apply-crop" class="btn-crop-confirm">✔ Apply Crop</button>
       <button id="btn-cancel-crop" class="btn-crop-cancel">✖ Cancel</button>
     </div>
