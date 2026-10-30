@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenFullPage</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <img src="../icons/icon32.png" alt="Logo" class="logo">
+        <div class="brand-text">
+          <h1>OpenFullPage</h1>
+          <span class="badge-free">100% FREE</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="btn-open-history" class="icon-btn" title="Capture History" aria-label="History">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+        </button>
+        <button id="btn-open-settings" class="icon-btn" title="Settings" aria-label="Settings">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Actions -->
+    <div class="actions-list">
+      <button id="btn-full-page" class="action-card action-primary">
+        <div class="action-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
+            <line x1="8" y1="6" x2="16" y2="6"></line>
+            <line x1="8" y1="10" x2="16" y2="10"></line>
+            <line x1="8" y1="14" x2="12" y2="14"></line>
+            <polyline points="10 18 12 20 14 18"></polyline>
+          </svg>
+        </div>
+        <div class="action-info">
+          <div class="action-title">Capture Entire Page</div>
+          <div class="action-desc">Auto-scroll & stitch whole page</div>
+        </div>
+        <span class="shortcut-tag">Alt+Shift+P</span>
+      </button>
+
+      <button id="btn-visible-viewport" class="action-card">
+        <div class="action-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+        </div>
+        <div class="action-info">
+          <div class="action-title">Visible Viewport</div>
+          <div class="action-desc">Instant snapshot of current view</div>
+        </div>
+        <span class="shortcut-tag">Alt+Shift+V</span>
+      </button>
+
+      <button id="btn-selected-area" class="action-card">
+        <div class="action-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 7V4h3"></path>
+            <path d="M17 4h3v3"></path>
+            <path d="M4 17v3h3"></path>
+            <path d="M17 20h3v-3"></path>
+            <rect x="8" y="8" width="8" height="8" rx="1"></rect>
+          </svg>
+        </div>
+        <div class="action-info">
+          <div class="action-title">Selected Area</div>
+          <div class="action-desc">Click & drag custom rectangle</div>
+        </div>
+        <span class="shortcut-tag">Alt+Shift+S</span>
+      </button>
+
+      <button id="btn-selected-element" class="action-card">
+        <div class="action-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="16 18 22 12 16 6"></polyline>
+            <polyline points="8 6 2 12 8 18"></polyline>
+          </svg>
+        </div>
+        <div class="action-info">
+          <div class="action-title">Selected Element</div>
+          <div class="action-desc">Hover & click any DOM element</div>
+        </div>
+        <span class="shortcut-tag">Alt+Shift+E</span>
+      </button>
+    </div>
+
+    <!-- Quick Preferences Strip -->
+    <div class="quick-settings">
+      <div class="setting-item">
+        <label for="quick-format">Default Format:</label>
+        <select id="quick-format" class="select-mini">
+          <option value="png">PNG (Lossless)</option>
+          <option value="jpeg">JPG</option>
+          <option value="webp">WebP</option>
+          <option value="pdf">PDF Document</option>
+        </select>
+      </div>
+      <div class="setting-item">
+        <label for="quick-autodownload">Auto-Download:</label>
+        <input type="checkbox" id="quick-autodownload" class="toggle-checkbox">
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="privacy-note">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.5">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+        </svg>
+        <span>100% Local & Offline • Zero Tracking</span>
+      </div>
+    </footer>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

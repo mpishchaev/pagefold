@@ -1,0 +1,20 @@
+{
+  "name": "chrome-screen-plugin",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "node tests/test_extension.js",
+    "generate-icons": "node icons/generate_icons.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "jspdf": "^4.2.1"
+  },
+  "devDependencies": {
+    "sharp": "^0.35.5"
+  }
+}

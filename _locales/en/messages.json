@@ -1,0 +1,34 @@
+{
+  "extensionName": {
+    "message": "OpenFullPage - Full Page Screenshot & Editor",
+    "description": "The extension name"
+  },
+  "extensionDescription": {
+    "message": "100% Free & Local full-page screen capture, crop, annotation, PDF and image export with zero paywalls or tracking.",
+    "description": "The extension description"
+  },
+  "captureFullPage": {
+    "message": "Capture Entire Page",
+    "description": "Full page capture action"
+  },
+  "captureVisible": {
+    "message": "Capture Visible Area",
+    "description": "Visible area capture action"
+  },
+  "captureSelected": {
+    "message": "Capture Selected Area",
+    "description": "Selected area capture action"
+  },
+  "captureElement": {
+    "message": "Capture Element",
+    "description": "Selected element capture action"
+  },
+  "galleryHistory": {
+    "message": "Capture History",
+    "description": "History button"
+  },
+  "settings": {
+    "message": "Settings",
+    "description": "Settings button"
+  }
+}

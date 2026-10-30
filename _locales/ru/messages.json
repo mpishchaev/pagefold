@@ -1,0 +1,34 @@
+{
+  "extensionName": {
+    "message": "OpenFullPage - Снимок всей страницы и редактор",
+    "description": "The extension name"
+  },
+  "extensionDescription": {
+    "message": "100% бесплатный и локальный плагин создания скриншотов всей страницы, обрезки, аннотаций, экспорта в PDF/PNG без ограничений и платных функций.",
+    "description": "The extension description"
+  },
+  "captureFullPage": {
+    "message": "Вся страница целиком",
+    "description": "Full page capture action"
+  },
+  "captureVisible": {
+    "message": "Видимая область",
+    "description": "Visible area capture action"
+  },
+  "captureSelected": {
+    "message": "Выделенная область",
+    "description": "Selected area capture action"
+  },
+  "captureElement": {
+    "message": "Выбранный элемент",
+    "description": "Selected element capture action"
+  },
+  "galleryHistory": {
+    "message": "История снимков",
+    "description": "History button"
+  },
+  "settings": {
+    "message": "Настройки",
+    "description": "Settings button"
+  }
+}

@@ -1,0 +1,226 @@
+/* OpenFullPage - Injected Content Overlay Styles */
+
+/* 1. Full Page Capture HUD */
+#openfullpage-hud {
+  position: fixed !important;
+  top: 24px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  z-index: 2147483647 !important;
+  background: rgba(15, 23, 42, 0.92) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 9999px !important;
+  padding: 10px 20px !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 14px !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  color: #FFFFFF !important;
+  font-size: 14px !important;
+  pointer-events: auto !important;
+  user-select: none !important;
+  animation: openfp-fade-in 0.25s ease-out !important;
+}
+
+@keyframes openfp-fade-in {
+  from { opacity: 0; transform: translate(-50%, -12px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+#openfullpage-hud .openfp-icon {
+  width: 22px !important;
+  height: 22px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  animation: openfp-pulse 1.5s infinite !important;
+}
+
+@keyframes openfp-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.85; }
+}
+
+#openfullpage-hud .openfp-text {
+  font-weight: 500 !important;
+  white-space: nowrap !important;
+  color: #F8FAFC !important;
+}
+
+#openfullpage-hud .openfp-progress-wrap {
+  width: 140px !important;
+  height: 8px !important;
+  background: rgba(255, 255, 255, 0.18) !important;
+  border-radius: 9999px !important;
+  overflow: hidden !important;
+  position: relative !important;
+}
+
+#openfullpage-hud .openfp-progress-bar {
+  height: 100% !important;
+  width: 0% !important;
+  background: linear-gradient(90deg, #6366F1, #38BDF8) !important;
+  border-radius: 9999px !important;
+  transition: width 0.15s ease-out !important;
+}
+
+#openfullpage-hud .openfp-percent {
+  font-weight: 600 !important;
+  font-variant-numeric: tabular-nums !important;
+  min-width: 38px !important;
+  color: #38BDF8 !important;
+}
+
+#openfullpage-hud .openfp-cancel-btn {
+  background: rgba(239, 68, 68, 0.2) !important;
+  color: #FCA5A5 !important;
+  border: 1px solid rgba(239, 68, 68, 0.4) !important;
+  padding: 4px 10px !important;
+  border-radius: 9999px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+#openfullpage-hud .openfp-cancel-btn:hover {
+  background: rgba(239, 68, 68, 0.4) !important;
+  color: #FFFFFF !important;
+}
+
+/* 2. Area Selection Snipping Overlay */
+#openfullpage-select-overlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 2147483646 !important;
+  cursor: crosshair !important;
+  background: rgba(0, 0, 0, 0.3) !important;
+  user-select: none !important;
+  touch-action: none !important;
+}
+
+#openfullpage-select-box {
+  position: absolute !important;
+  border: 2px dashed #38BDF8 !important;
+  background: rgba(56, 189, 248, 0.12) !important;
+  box-shadow: 0 0 0 99999px rgba(0, 0, 0, 0.5) !important;
+  display: none;
+  pointer-events: none !important;
+}
+
+#openfullpage-select-badge {
+  position: absolute !important;
+  top: -30px !important;
+  left: 0 !important;
+  background: #0F172A !important;
+  color: #38BDF8 !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  padding: 3px 8px !important;
+  border-radius: 4px !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3) !important;
+  white-space: nowrap !important;
+}
+
+#openfullpage-select-actions {
+  position: absolute !important;
+  bottom: -44px !important;
+  right: 0 !important;
+  display: flex !important;
+  gap: 8px !important;
+  pointer-events: auto !important;
+}
+
+.openfp-btn-action {
+  padding: 6px 14px !important;
+  border-radius: 6px !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  border: none !important;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.openfp-btn-confirm {
+  background: #0284C7 !important;
+  color: #FFFFFF !important;
+}
+.openfp-btn-confirm:hover {
+  background: #0369A1 !important;
+}
+
+.openfp-btn-cancel {
+  background: #334155 !important;
+  color: #F1F5F9 !important;
+}
+.openfp-btn-cancel:hover {
+  background: #475569 !important;
+}
+
+/* 3. Element Inspector Highlight Box */
+#openfullpage-element-highlighter {
+  position: fixed !important;
+  z-index: 2147483645 !important;
+  pointer-events: none !important;
+  border: 2px solid #6366F1 !important;
+  background: rgba(99, 102, 241, 0.15) !important;
+  transition: all 0.05s ease-out !important;
+  box-sizing: border-box !important;
+}
+
+#openfullpage-element-badge {
+  position: absolute !important;
+  top: -26px !important;
+  left: 0 !important;
+  background: #1E1B4B !important;
+  color: #A5B4FC !important;
+  border: 1px solid #4F46E5 !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  padding: 2px 8px !important;
+  border-radius: 4px !important;
+  white-space: nowrap !important;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3) !important;
+}
+
+#openfullpage-element-banner {
+  position: fixed !important;
+  top: 16px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  z-index: 2147483647 !important;
+  background: rgba(15, 23, 42, 0.95) !important;
+  backdrop-filter: blur(8px) !important;
+  border: 1px solid #4F46E5 !important;
+  color: #F8FAFC !important;
+  padding: 8px 18px !important;
+  border-radius: 9999px !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  user-select: none !important;
+}
+
+#openfullpage-element-banner .openfp-kbd {
+  background: #334155 !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  font-size: 11px !important;
+  color: #94A3B8 !important;
+}

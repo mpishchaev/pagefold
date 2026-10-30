@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Screenshot Viewer - OpenFullPage</title>
+  <link rel="stylesheet" href="viewer.css">
+</head>
+<body class="theme-dark">
+  <!-- Top Application Bar -->
+  <header class="top-nav">
+    <div class="nav-left">
+      <div class="brand-badge">
+        <img src="../icons/icon32.png" alt="OpenFullPage" class="nav-logo">
+        <span class="nav-title">OpenFullPage</span>
+      </div>
+      <div class="meta-separator"></div>
+      <div class="doc-meta">
+        <span id="doc-title" class="doc-title" title="Screenshot Title">Loading...</span>
+        <span id="doc-dims" class="doc-dims">0 × 0 px</span>
+        <span id="doc-type" class="doc-type-badge">Full Page</span>
+      </div>
+    </div>
+
+    <!-- Center Zoom & Mode Controls -->
+    <div class="nav-center">
+      <div class="zoom-controls">
+        <button id="btn-zoom-out" class="tool-btn" title="Zoom Out (Ctrl -)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            <line x1="8" y1="11" x2="14" y2="11"></line>
+          </svg>
+        </button>
+        <span id="zoom-level-text" class="zoom-text">100%</span>
+        <button id="btn-zoom-in" class="tool-btn" title="Zoom In (Ctrl +)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            <line x1="11" y1="8" x2="11" y2="14"></line>
+            <line x1="8" y1="11" x2="14" y2="11"></line>
+          </svg>
+        </button>
+        <button id="btn-zoom-fit" class="tool-btn text-btn" title="Fit to Screen">Fit</button>
+        <button id="btn-zoom-100" class="tool-btn text-btn" title="Actual Size (100%)">100%</button>
+      </div>
+
+      <button id="btn-toggle-editor" class="btn-mode-toggle" title="Toggle Annotator & Editor">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 20h9"></path>
+          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+        </svg>
+        <span>Annotate & Edit</span>
+      </button>
+    </div>
+
+    <!-- Right Actions: Copy, Download, PDF, History -->
+    <div class="nav-right">
+      <button id="btn-copy-clipboard" class="btn-action btn-secondary" title="Copy Image to Clipboard (Ctrl+C)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        <span>Copy</span>
+      </button>
+
+      <div class="dropdown-wrapper">
+        <button id="btn-download-primary" class="btn-action btn-primary" title="Download Screenshot">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span id="download-btn-label">Download PNG</span>
+        </button>
+        <button id="btn-download-menu-toggle" class="btn-action btn-primary btn-menu-arrow" title="Download Options">
+          ▾
+        </button>
+        <div id="download-menu" class="dropdown-menu hidden">
+          <button class="dropdown-item" data-action="download-png">
+            <strong>PNG</strong> (Lossless / High Res)
+          </button>
+          <button class="dropdown-item" data-action="download-jpg">
+            <strong>JPG</strong> (Compressed Photo)
+          </button>
+          <button class="dropdown-item" data-action="download-webp">
+            <strong>WebP</strong> (Modern Web)
+          </button>
+          <div class="menu-divider"></div>
+          <button class="dropdown-item" data-action="open-pdf-modal">
+            <strong>PDF Document</strong> (Single or Multi-Page)...
+          </button>
+        </div>
+      </div>
+
+      <div class="meta-separator"></div>
+
+      <button id="btn-history" class="icon-nav-btn" title="Gallery & History">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+      </button>
+
+      <button id="btn-settings" class="icon-nav-btn" title="Settings">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      </button>
+
+      <button id="btn-delete" class="icon-nav-btn btn-danger" title="Delete Screenshot">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Secondary Annotation Toolbar (Expands when Edit mode is active) -->
+  <div id="editor-toolbar" class="editor-toolbar hidden">
+    <div class="toolbar-section">
+      <button class="editor-tool-btn active" data-tool="select" title="Select / Pan">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 3l7 18 3-7 7-3L3 3z"></path>
+        </svg>
+      </button>
+      <button class="editor-tool-btn" data-tool="crop" title="Crop Image">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M6 2v14a2 2 0 0 0 2 2h14"></path>
+          <path d="M18 22V8a2 2 0 0 0-2-2H2"></path>
+        </svg>
+      </button>
+      <button class="editor-tool-btn" data-tool="redact" title="Blur / Pixelate Sensitive Info">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7"></rect>
+          <rect x="14" y="3" width="7" height="7"></rect>
+          <rect x="14" y="14" width="7" height="7"></rect>
+          <rect x="3" y="14" width="7" height="7"></rect>
+        </svg>
+      </button>
+      <button class="editor-tool-btn" data-tool="pen" title="Pencil / Draw">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+        </svg>
+      </button>
+      <button class="editor-tool-btn" data-tool="highlighter" title="Highlighter">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="m9 11-6 6v3h3l6-6"></path>
+          <path d="m22 2-7 7-4-4 7-7z"></path>
+        </svg>
+      </button>
+      <button class="editor-tool-btn" data-tool="arrow" title="Draw Arrow">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+          <polyline points="12 5 19 12 12 19"></polyline>
+        </svg>
+      </button>
+      <button class="editor-tool-btn" data-tool="rect" title="Rectangle">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+        </svg>
+      </button>
+      <button class="editor-tool-btn" data-tool="circle" title="Circle">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+        </svg>
+      </button>
+      <button class="editor-tool-btn" data-tool="text" title="Insert Text">
+        <span style="font-weight: 700; font-size: 14px;">T</span>
+      </button>
+      <button class="editor-tool-btn" data-tool="step" title="Numbered Step Badges (1, 2, 3...)">
+        <span style="font-weight: 800; font-size: 13px; border: 1.5px solid currentColor; border-radius: 50%; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center;">1</span>
+      </button>
+      <button class="editor-tool-btn" data-tool="sticker" title="Stickers & Icons">
+        <span id="active-sticker-icon">✔</span>
+      </button>
+    </div>
+
+    <div class="toolbar-divider"></div>
+
+    <!-- Color Palette & Styles -->
+    <div class="toolbar-section">
+      <div class="color-palette">
+        <button class="color-dot active" style="background: #ef4444;" data-color="#ef4444"></button>
+        <button class="color-dot" style="background: #3b82f6;" data-color="#3b82f6"></button>
+        <button class="color-dot" style="background: #10b981;" data-color="#10b981"></button>
+        <button class="color-dot" style="background: #f59e0b;" data-color="#f59e0b"></button>
+        <button class="color-dot" style="background: #8b5cf6;" data-color="#8b5cf6"></button>
+        <button class="color-dot" style="background: #000000;" data-color="#000000"></button>
+        <button class="color-dot" style="background: #ffffff; border: 1px solid #94a3b8;" data-color="#ffffff"></button>
+        <input type="color" id="custom-color-picker" value="#ef4444" title="Custom Color">
+      </div>
+
+      <div class="stroke-selector">
+        <label>Stroke:</label>
+        <select id="editor-stroke-width">
+          <option value="2">Thin (2px)</option>
+          <option value="4" selected>Medium (4px)</option>
+          <option value="8">Thick (8px)</option>
+          <option value="16">Extra Thick (16px)</option>
+        </select>
+      </div>
+
+      <label class="fill-toggle">
+        <input type="checkbox" id="editor-fill-shape">
+        <span>Fill Shape</span>
+      </label>
+    </div>
+
+    <div class="toolbar-divider"></div>
+
+    <!-- Canvas Transform & History -->
+    <div class="toolbar-section">
+      <button id="btn-editor-undo" class="editor-tool-btn" title="Undo (Ctrl+Z)" disabled>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 7v6h6"></path>
+          <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
+        </svg>
+      </button>
+      <button id="btn-editor-redo" class="editor-tool-btn" title="Redo (Ctrl+Y)" disabled>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 7v6h-6"></path>
+          <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path>
+        </svg>
+      </button>
+      <button id="btn-editor-rotate" class="editor-tool-btn" title="Rotate 90° Clockwise">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21.5 2v6h-6"></path>
+          <path d="M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+        </svg>
+      </button>
+      <button id="btn-editor-flip" class="editor-tool-btn" title="Flip Horizontal">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="8 3 4 7 8 11"></polyline>
+          <polyline points="16 3 20 7 16 11"></polyline>
+          <line x1="4" y1="7" x2="20" y2="7"></line>
+        </svg>
+      </button>
+      <button id="btn-editor-clear" class="editor-tool-btn" title="Clear All Annotations">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Crop Apply/Cancel Bar -->
+    <div id="crop-actions-bar" class="crop-actions-bar hidden">
+      <button id="btn-apply-crop" class="btn-crop-confirm">✔ Apply Crop</button>
+      <button id="btn-cancel-crop" class="btn-crop-cancel">✖ Cancel</button>
+    </div>
+  </div>
+
+  <!-- Main Viewport Scroll Container -->
+  <main id="viewport-container" class="viewport-container">
+    <div id="canvas-stage" class="canvas-stage">
+      <!-- Editor & Canvases mounted here dynamically -->
+    </div>
+  </main>
+
+  <!-- PDF Export Options Modal -->
+  <div id="modal-pdf" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Export to PDF</h3>
+        <button class="modal-close" data-modal="modal-pdf">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Page Format:</label>
+          <select id="pdf-format">
+            <option value="continuous">Single Continuous Page (Exact fit)</option>
+            <option value="a4" selected>Multi-page A4 (Standard print)</option>
+            <option value="letter">Multi-page US Letter</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Orientation:</label>
+          <select id="pdf-orientation">
+            <option value="auto" selected>Auto (Based on aspect ratio)</option>
+            <option value="portrait">Portrait</option>
+            <option value="landscape">Landscape</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Margins:</label>
+          <select id="pdf-margins">
+            <option value="0">None (0 mm)</option>
+            <option value="5">Compact (5 mm)</option>
+            <option value="10" selected>Standard (10 mm)</option>
+            <option value="15">Spacious (15 mm)</option>
+          </select>
+        </div>
+
+        <div class="form-group checkbox-group">
+          <label>
+            <input type="checkbox" id="pdf-include-header" checked>
+            <span>Include Page Title & URL header</span>
+          </label>
+          <label>
+            <input type="checkbox" id="pdf-include-numbers" checked>
+            <span>Include Page Numbers (Page X of Y)</span>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-modal-cancel" data-modal="modal-pdf">Cancel</button>
+        <button id="btn-confirm-pdf-export" class="btn-modal-confirm">Export PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- History / Gallery Drawer -->
+  <div id="modal-history" class="modal-backdrop hidden">
+    <div class="modal-box modal-lg">
+      <div class="modal-header">
+        <div class="history-header-title">
+          <h3>Local Screenshot History</h3>
+          <span id="history-storage-stat" class="history-stat">0 captures • 0 MB</span>
+        </div>
+        <button class="modal-close" data-modal="modal-history">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="history-toolbar">
+          <input type="text" id="history-search-input" placeholder="Search by title or URL..." class="search-input">
+          <button id="btn-clear-history" class="btn-secondary btn-sm btn-danger-subtle">Clear History</button>
+        </div>
+        <div id="history-grid" class="history-grid">
+          <!-- History cards dynamically populated -->
+        </div>
+        <div id="history-empty" class="history-empty hidden">
+          <p>No screenshots saved yet.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="modal-settings" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Settings</h3>
+        <button class="modal-close" data-modal="modal-settings">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Default File Format:</label>
+          <select id="setting-format">
+            <option value="png">PNG (Lossless, highest quality)</option>
+            <option value="jpeg">JPG (Smaller file size)</option>
+            <option value="webp">WebP (Efficient web format)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>JPG / WebP Quality (<span id="setting-quality-val">92%</span>):</label>
+          <input type="range" id="setting-quality" min="30" max="100" value="92">
+        </div>
+
+        <div class="form-group">
+          <label>Filename Template:</label>
+          <input type="text" id="setting-filename-template" class="text-input" value="screencapture-{domain}-{date}-{time}">
+          <small class="field-hint">Variables: {title}, {domain}, {url}, {date}, {time}, {timestamp}</small>
+          <div class="template-preview">Preview: <code id="filename-preview">screencapture-example-com-2026-10-30.png</code></div>
+        </div>
+
+        <div class="form-group">
+          <label>Scroll Delay (<span id="setting-scroll-delay-val">150 ms</span>):</label>
+          <input type="range" id="setting-scroll-delay" min="50" max="800" step="25" value="150">
+          <small class="field-hint">Increase delay for slow pages with heavy animations or lazy loading.</small>
+        </div>
+
+        <div class="form-group checkbox-group">
+          <label>
+            <input type="checkbox" id="setting-hide-fixed" checked>
+            <span>Auto-hide fixed/sticky headers during full page capture</span>
+          </label>
+          <label>
+            <input type="checkbox" id="setting-auto-download">
+            <span>Auto-download file immediately after capture</span>
+          </label>
+          <label>
+            <input type="checkbox" id="setting-auto-clipboard">
+            <span>Auto-copy to clipboard after capture</span>
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label>Theme:</label>
+          <select id="setting-theme">
+            <option value="system">System Default</option>
+            <option value="dark" selected>Dark Theme</option>
+            <option value="light">Light Theme</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-modal-confirm" data-modal="modal-settings">Save & Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Box -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- Load bundled standalone jsPDF -->
+  <script src="../lib/jspdf.umd.min.js"></script>
+
+  <!-- Application Logic -->
+  <script type="module" src="viewer.js"></script>
+</body>
+</html>

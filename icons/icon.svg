@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4F46E5"/>
+      <stop offset="50%" stop-color="#6366F1"/>
+      <stop offset="100%" stop-color="#06B6D4"/>
+    </linearGradient>
+    <linearGradient id="lensGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E1B4B"/>
+      <stop offset="100%" stop-color="#312E81"/>
+    </linearGradient>
+    <linearGradient id="pageGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#E2E8F0"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="125%" height="125%">
+      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- Background rounded squircle -->
+  <rect x="32" y="32" width="448" height="448" rx="100" fill="url(#bgGrad)" filter="url(#shadow)"/>
+
+  <!-- Page scroll sheet representation -->
+  <rect x="136" y="96" width="240" height="320" rx="20" fill="url(#pageGrad)" opacity="0.95"/>
+  <rect x="166" y="130" width="120" height="14" rx="7" fill="#6366F1" opacity="0.7"/>
+  <rect x="166" y="160" width="180" height="10" rx="5" fill="#94A3B8" opacity="0.6"/>
+  <rect x="166" y="180" width="150" height="10" rx="5" fill="#94A3B8" opacity="0.6"/>
+  <rect x="166" y="200" width="170" height="10" rx="5" fill="#94A3B8" opacity="0.6"/>
+
+  <!-- Camera Body overlay in center -->
+  <g filter="url(#shadow)">
+    <!-- Camera base -->
+    <rect x="106" y="220" width="300" height="180" rx="36" fill="#1E293B"/>
+    <!-- Top hump / viewfinder -->
+    <path d="M 216 220 L 236 186 L 276 186 L 296 220 Z" fill="#1E293B"/>
+    <!-- Small flash/sensor light -->
+    <circle cx="156" cy="254" r="12" fill="#38BDF8"/>
+    <!-- Flash window -->
+    <rect x="330" y="246" width="36" height="16" rx="6" fill="#64748B"/>
+    <!-- Outer Lens Ring -->
+    <circle cx="256" cy="310" r="64" fill="#334155" stroke="#475569" stroke-width="6"/>
+    <!-- Inner Lens Glass -->
+    <circle cx="256" cy="310" r="48" fill="url(#lensGrad)"/>
+    <!-- Aperture / Glass reflection -->
+    <circle cx="244" cy="298" r="18" fill="#38BDF8" opacity="0.8"/>
+    <circle cx="268" cy="324" r="7" fill="#FFFFFF" opacity="0.7"/>
+    <!-- Shutter blade indicator -->
+    <circle cx="256" cy="310" r="30" fill="none" stroke="#6366F1" stroke-width="4" stroke-dasharray="8 6"/>
+  </g>
+
+  <!-- Downward arrow / Page indicator -->
+  <g transform="translate(376, 200)">
+    <circle cx="0" cy="0" r="28" fill="#10B981" filter="url(#shadow)"/>
+    <path d="M -8 -6 L 0 4 L 8 -6 M 0 4 L 0 -12" fill="none" stroke="#FFFFFF" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
