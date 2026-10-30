@@ -17,16 +17,16 @@ async function ensureContentScript(tabId) {
   try {
     await chrome.tabs.sendMessage(tabId, { action: 'PING' });
   } catch (e) {
-    // If message fails, inject script and CSS dynamically
+    // If message fails, inject script and CSS dynamically into all frames
     await chrome.scripting.insertCSS({
-      target: { tabId },
+      target: { tabId, allFrames: true },
       files: ['content/overlay.css']
     }).catch(() => {});
 
     await chrome.scripting.executeScript({
-      target: { tabId },
+      target: { tabId, allFrames: true },
       files: ['content/content.js']
-    });
+    }).catch(() => {});
   }
 }
 
