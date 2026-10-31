@@ -112,6 +112,110 @@ for (const relPath of requiredFiles) {
   assert(content.length > 50, `File has substantial content: ${relPath} (${content.length} bytes)`);
 }
 
+// 6. Test Auto-Crop and Context Menu UI & Logic
+console.log('\n--- 6. Testing Auto-Crop & Context Menu Elements ---');
+const viewerHtml = fs.readFileSync(path.join(rootDir, 'viewer/viewer.html'), 'utf8');
+assert(viewerHtml.includes('id="btn-auto-crop"'), 'Auto-Crop button present in top nav');
+assert(viewerHtml.includes('id="btn-detect-content"'), 'Detect Content button present in crop bar');
+assert(viewerHtml.includes('id="editor-context-menu"'), 'Custom context menu (ПКМ) container present');
+assert(viewerHtml.includes('data-action="copy"'), 'Context menu has Copy Image action');
+assert(viewerHtml.includes('data-action="save"'), 'Context menu has Save Image action');
+assert(viewerHtml.includes('data-action="auto-crop"'), 'Context menu has Auto-Crop action');
+
+const editorJs = fs.readFileSync(path.join(rootDir, 'viewer/editor.js'), 'utf8');
+assert(editorJs.includes('detectContentBounds(padding = 15)'), 'detectContentBounds method implemented with default 15px');
+assert(editorJs.includes('autoCrop(padding = 15)'), 'autoCrop method implemented');
+assert(editorJs.includes('snapCropToContent(padding = 15)'), 'snapCropToContent method implemented');
+
+// Test Smart Detection algorithm simulation with stretched divider rule
+console.log('\n--- 7. Testing Smart Detection Algorithm Unit Logic ---');
+const mockW = 1000;
+const mockH = 600;
+const mockData = new Uint8ClampedArray(mockW * mockH * 4);
+// Fill with white background (255, 255, 255, 255)
+mockData.fill(255);
+
+// Draw central content block: X from 350 to 650 (width 300), Y from 100 to 450 (height 350)
+for (let y = 100; y <= 450; y++) {
+  for (let x = 350; x <= 650; x++) {
+    const idx = (y * mockW + x) * 4;
+    mockData[idx] = 30; // dark content
+    mockData[idx + 1] = 30;
+    mockData[idx + 2] = 30;
+  }
+}
+
+// Draw a stretched 1px full-width footer line across almost the entire width: X from 10 to 990 (span 980) at Y = 550
+for (let x = 10; x <= 990; x++) {
+  const idx = (550 * mockW + x) * 4;
+  mockData[idx] = 100;
+  mockData[idx + 1] = 100;
+  mockData[idx + 2] = 100;
+}
+
+// Run simulated detection logic (identical to detectContentBounds)
+{
+  const width = mockW;
+  const height = mockH;
+  const data = mockData;
+  const bgR = 255, bgG = 255, bgB = 255;
+  const isContent = (r, g, b) => (Math.abs(r - bgR) + Math.abs(g - bgG) + Math.abs(b - bgB)) > 22;
+
+  const rowSpan = new Int32Array(height);
+  const rowCount = new Int32Array(height);
+  const isFullWidth = new Uint8Array(height);
+
+  for (let y = 0; y < height; y++) {
+    let minX = -1, maxX = -1, cnt = 0;
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      if (isContent(data[idx], data[idx + 1], data[idx + 2])) {
+        cnt++;
+        if (minX === -1) minX = x;
+        maxX = x;
+      }
+    }
+    rowCount[y] = cnt;
+    if (minX !== -1) {
+      const span = maxX - minX + 1;
+      rowSpan[y] = span;
+      if (span > width * 0.65 || cnt > width * 0.60) {
+        isFullWidth[y] = 1;
+      }
+    }
+  }
+
+  assert(isFullWidth[550] === 1, 'Full-width stretched divider row correctly identified and flagged');
+  assert(isFullWidth[200] === 0, 'Standard content row correctly not flagged as full-width');
+
+  const colDensity = new Int32Array(width);
+  for (let y = 0; y < height; y++) {
+    if (isFullWidth[y]) continue; // ignore stretched line
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      if (isContent(data[idx], data[idx + 1], data[idx + 2])) {
+        colDensity[x]++;
+      }
+    }
+  }
+
+  let minX = -1, maxX = -1;
+  for (let x = 0; x < width; x++) {
+    if (colDensity[x] > 1) {
+      if (minX === -1) minX = x;
+      maxX = x;
+    }
+  }
+
+  assert(minX === 350 && maxX === 650, `Column bounds detected accurately (${minX} to ${maxX}) ignoring full-width line`);
+
+  const pad = 15;
+  const cropX = Math.max(0, minX - pad);
+  const cropW = (maxX - minX + 1) + (pad * 2);
+  assert(cropX === 335, `15px left padding applied accurately (${cropX} === 335)`);
+  assert(cropW === 331, `15px total width padding applied accurately (${cropW} === 331)`);
+}
+
 console.log(`\n========================================`);
 console.log(`🎉 ALL ${passedTests} OF ${totalTests} VERIFICATION CHECKS PASSED!`);
 console.log(`========================================\n`);

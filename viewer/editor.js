@@ -641,6 +641,257 @@ export class ScreenshotEditor {
     this.renderOverlay();
   }
 
+  /**
+   * Smart Content Bounds Detection
+   * Automatically isolates the primary content column and rows by trimming uniform background
+   * while intelligently ignoring full-width stretched headers, footers, and divider rules.
+   *
+   * @param {number} padding Margin padding in pixels (default: 15)
+   * @returns {Object|null} { cropX, cropY, cropW, cropH, minX, maxX, minY, maxY, bg }
+   */
+  detectContentBounds(padding = 15) {
+    const width = this.baseCanvas.width;
+    const height = this.baseCanvas.height;
+    if (width < 30 || height < 30) return null;
+
+    const imgData = this.baseCtx.getImageData(0, 0, width, height);
+    const data = imgData.data;
+
+    // 1. Detect Background Color
+    // Sample along left and right margins and corners
+    const borderSamples = [];
+    const sampleStepY = Math.max(1, Math.floor(height / 60));
+    const sampleInset = Math.min(6, Math.floor(width / 10));
+
+    for (let y = 0; y < height; y += sampleStepY) {
+      for (let dx = 0; dx < sampleInset; dx++) {
+        // Left margin
+        const idxL = (y * width + dx) * 4;
+        borderSamples.push([data[idxL], data[idxL + 1], data[idxL + 2], data[idxL + 3]]);
+        // Right margin
+        const idxR = (y * width + (width - 1 - dx)) * 4;
+        borderSamples.push([data[idxR], data[idxR + 1], data[idxR + 2], data[idxR + 3]]);
+      }
+    }
+
+    if (borderSamples.length === 0) return null;
+
+    let sumR = 0, sumG = 0, sumB = 0, sumA = 0;
+    for (let i = 0; i < borderSamples.length; i++) {
+      sumR += borderSamples[i][0];
+      sumG += borderSamples[i][1];
+      sumB += borderSamples[i][2];
+      sumA += borderSamples[i][3];
+    }
+    const bgR = Math.round(sumR / borderSamples.length);
+    const bgG = Math.round(sumG / borderSamples.length);
+    const bgB = Math.round(sumB / borderSamples.length);
+    const bgA = Math.round(sumA / borderSamples.length);
+
+    const isBgTransparent = (bgA < 30);
+    const colorDist = (r, g, b, a) => {
+      if (isBgTransparent) {
+        return a > 30 ? 100 : 0;
+      }
+      if (a < 30) return 100;
+      return Math.abs(r - bgR) + Math.abs(g - bgG) + Math.abs(b - bgB);
+    };
+
+    const threshold = 22; // color difference threshold
+    const isContentPixel = (r, g, b, a) => colorDist(r, g, b, a) > threshold;
+
+    // 2. Row Analysis: identify content span and detect full-width stretched lines/bars
+    const rowContentCount = new Int32Array(height);
+    const rowMinX = new Int32Array(height).fill(-1);
+    const rowMaxX = new Int32Array(height).fill(-1);
+    const isFullWidthRow = new Uint8Array(height);
+
+    for (let y = 0; y < height; y++) {
+      let firstX = -1;
+      let lastX = -1;
+      let count = 0;
+      const rowOffset = y * width * 4;
+
+      for (let x = 0; x < width; x++) {
+        const idx = rowOffset + (x * 4);
+        if (isContentPixel(data[idx], data[idx + 1], data[idx + 2], data[idx + 3])) {
+          count++;
+          if (firstX === -1) firstX = x;
+          lastX = x;
+        }
+      }
+
+      rowContentCount[y] = count;
+      rowMinX[y] = firstX;
+      rowMaxX[y] = lastX;
+
+      if (firstX !== -1) {
+        const span = lastX - firstX + 1;
+        // If content spans > 65% of width or pixel density is > 60%
+        if (span > width * 0.65 || count > width * 0.60) {
+          isFullWidthRow[y] = 1;
+        }
+      }
+    }
+
+    // Check if we have standard (non-full-width) content rows
+    let standardRowCount = 0;
+    let totalContentRows = 0;
+    for (let y = 0; y < height; y++) {
+      if (rowContentCount[y] > 0) {
+        totalContentRows++;
+        if (!isFullWidthRow[y]) standardRowCount++;
+      }
+    }
+
+    // Only filter out full-width rows if there are sufficient standard content rows
+    const filterFullWidth = (totalContentRows > 0 && standardRowCount >= totalContentRows * 0.05);
+
+    // 3. Column Analysis: count content pixels per column
+    const colDensity = new Int32Array(width);
+    for (let y = 0; y < height; y++) {
+      if (filterFullWidth && isFullWidthRow[y]) continue; // ignore stretched dividers for column detection
+      const rowOffset = y * width * 4;
+      for (let x = 0; x < width; x++) {
+        const idx = rowOffset + (x * 4);
+        if (isContentPixel(data[idx], data[idx + 1], data[idx + 2], data[idx + 3])) {
+          colDensity[x]++;
+        }
+      }
+    }
+
+    // Find column bounds [minX, maxX]
+    let minX = -1;
+    let maxX = -1;
+    const colNoiseThreshold = Math.max(1, Math.floor(height * 0.003));
+
+    for (let x = 0; x < width; x++) {
+      if (colDensity[x] >= colNoiseThreshold) {
+        if (minX === -1) minX = x;
+        maxX = x;
+      }
+    }
+
+    // If no columns detected using filtered rows, fall back to all content rows
+    if (minX === -1 || maxX === -1 || maxX <= minX) {
+      for (let y = 0; y < height; y++) {
+        if (rowMinX[y] !== -1) {
+          if (minX === -1 || rowMinX[y] < minX) minX = rowMinX[y];
+          if (maxX === -1 || rowMaxX[y] > maxX) maxX = rowMaxX[y];
+        }
+      }
+    }
+
+    if (minX === -1 || maxX === -1) {
+      // Entire image appears uniform
+      return null;
+    }
+
+    // 4. Vertical Analysis: find minY and maxY
+    // Scan rows from top and bottom that contain content within [minX, maxX] (plus slight margin)
+    let minY = -1;
+    let maxY = -1;
+    const scanLeft = Math.max(0, minX - 10);
+    const scanRight = Math.min(width - 1, maxX + 10);
+
+    for (let y = 0; y < height; y++) {
+      let rowHasContent = false;
+      const rowOffset = y * width * 4;
+      for (let x = scanLeft; x <= scanRight; x++) {
+        const idx = rowOffset + (x * 4);
+        if (isContentPixel(data[idx], data[idx + 1], data[idx + 2], data[idx + 3])) {
+          rowHasContent = true;
+          break;
+        }
+      }
+      if (rowHasContent) {
+        if (minY === -1) minY = y;
+        maxY = y;
+      }
+    }
+
+    if (minY === -1) {
+      minY = 0;
+      maxY = height - 1;
+    }
+
+    // 5. Apply padding (15px) and clamp to canvas boundaries
+    const pad = Math.max(0, padding);
+    const cropX = Math.max(0, minX - pad);
+    const cropY = Math.max(0, minY - pad);
+    const contentW = maxX - minX + 1;
+    const contentH = maxY - minY + 1;
+    const cropW = Math.min(width - cropX, contentW + (pad * 2));
+    const cropH = Math.min(height - cropY, contentH + (pad * 2));
+
+    return {
+      cropX,
+      cropY,
+      cropW,
+      cropH,
+      minX,
+      maxX,
+      minY,
+      maxY,
+      bg: { r: bgR, g: bgG, b: bgB, a: bgA }
+    };
+  }
+
+  /**
+   * Immediately auto-crop canvas to primary content with specified padding
+   * @param {number} padding (default 15)
+   * @returns {Object|null} result { width, height, bounds, noChange }
+   */
+  autoCrop(padding = 15) {
+    const bounds = this.detectContentBounds(padding);
+    if (!bounds) return null;
+
+    const noChange = (
+      bounds.cropX === 0 &&
+      bounds.cropY === 0 &&
+      bounds.cropW === this.baseCanvas.width &&
+      bounds.cropH === this.baseCanvas.height
+    );
+
+    if (noChange) {
+      return { width: this.baseCanvas.width, height: this.baseCanvas.height, noChange: true, bounds };
+    }
+
+    this.cropRect = {
+      x: bounds.cropX,
+      y: bounds.cropY,
+      width: bounds.cropW,
+      height: bounds.cropH
+    };
+
+    const cropped = this.applyCrop();
+    return cropped ? { ...cropped, bounds } : null;
+  }
+
+  /**
+   * Snap current crop overlay box to content boundaries with padding
+   * @param {number} padding (default 15)
+   * @returns {Object|null} bounds
+   */
+  snapCropToContent(padding = 15) {
+    const bounds = this.detectContentBounds(padding);
+    if (!bounds) return null;
+
+    if (!this.isCropping) {
+      this.startCrop();
+    }
+
+    this.cropRect = {
+      x: bounds.cropX,
+      y: bounds.cropY,
+      width: bounds.cropW,
+      height: bounds.cropH
+    };
+
+    this.renderOverlay();
+    return bounds;
+  }
+
   handleCropMouseDown(pos) {
     const handle = this.getCropHitHandle(pos);
     this.activeCropHandle = handle;

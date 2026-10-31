@@ -99,6 +99,11 @@ export async function captureFullPage(tab) {
       // Allow animations and lazy loads to settle
       await new Promise((r) => setTimeout(r, scrollDelay));
 
+      // Temporarily hide HUD so it never gets captured in screenshots
+      try {
+        await chrome.tabs.sendMessage(tabId, { action: 'BEFORE_SNAP' }, { frameId: 0 });
+      } catch (e) {}
+
       // Snap visible tab
       const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
       slices.push({
@@ -107,6 +112,11 @@ export async function captureFullPage(tab) {
         windowWidth: viewportWidth,
         windowHeight: viewportHeight
       });
+
+      // Restore HUD visibility
+      try {
+        await chrome.tabs.sendMessage(tabId, { action: 'AFTER_SNAP' }, { frameId: 0 });
+      } catch (e) {}
 
       sliceIndex++;
 

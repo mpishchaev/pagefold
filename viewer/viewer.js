@@ -116,6 +116,7 @@ async function initViewer() {
   setupNavigationEvents();
   setupZoomEvents();
   setupEditorToolEvents();
+  setupContextMenu();
   setupModalEvents();
   setupSettingsEvents();
 }
@@ -208,7 +209,36 @@ function setupZoomEvents() {
 /**
  * Top Navigation and Action Bar Handlers
  */
+async function handleAutoCrop() {
+  if (!editor) return;
+  const res = editor.autoCrop(15);
+  if (!res) {
+    showToast('Could not detect content boundaries for auto-crop', true);
+    return;
+  }
+
+  if (res.noChange) {
+    showToast('Image is already closely fitted to content!');
+    return;
+  }
+
+  if (currentCapture) {
+    currentCapture.dimensions = { width: res.width, height: res.height };
+    currentCapture.dataUrl = editor.getExportDataUrl('png');
+    await saveCapture(currentCapture);
+  }
+
+  if (docDims) docDims.textContent = `${res.width} × ${res.height} px`;
+  fitToScreen();
+  showToast(`Auto-cropped to content (+15px padding: ${res.width} × ${res.height} px)! ✂️`);
+}
+
 function setupNavigationEvents() {
+  // Auto-Crop button in top nav
+  document.getElementById('btn-auto-crop')?.addEventListener('click', async () => {
+    await handleAutoCrop();
+  });
+
   // Toggle Annotator / Editor toolbar
   btnToggleEditor?.addEventListener('click', () => {
     const isHidden = editorToolbar.classList.toggle('hidden');
@@ -414,10 +444,143 @@ function setupEditorToolEvents() {
     }
   });
 
+  // Smart Auto-Detect content boundaries (+15px padding)
+  document.getElementById('btn-detect-content')?.addEventListener('click', () => {
+    if (!editor) return;
+    const bounds = editor.snapCropToContent(15);
+    if (bounds) {
+      showToast(`Content detected (${bounds.cropW} × ${bounds.cropH} px). Adjust handles or click Apply Crop.`);
+    } else {
+      showToast('Could not automatically detect content bounds', true);
+    }
+  });
+
   btnCancelCrop?.addEventListener('click', () => {
     editor.cancelCrop();
     cropActionsBar.classList.add('hidden');
     highlightActiveTool('select');
+  });
+}
+
+/**
+ * Setup Custom Context Menu (ПКМ - Right Click)
+ */
+function setupContextMenu() {
+  const contextMenu = document.getElementById('editor-context-menu');
+  const ctxUndo = document.getElementById('ctx-undo');
+  const ctxRedo = document.getElementById('ctx-redo');
+  if (!contextMenu) return;
+
+  function hideContextMenu() {
+    contextMenu.classList.add('hidden');
+  }
+
+  // Right-click inside viewport or stage
+  viewportContainer?.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Enable/disable Undo & Redo items based on history state
+    if (ctxUndo) ctxUndo.disabled = !(editor && editor.historyIndex > 0);
+    if (ctxRedo) ctxRedo.disabled = !(editor && editor.historyIndex < editor.history.length - 1);
+
+    contextMenu.classList.remove('hidden');
+
+    const menuWidth = contextMenu.offsetWidth || 240;
+    const menuHeight = contextMenu.offsetHeight || 380;
+
+    let posX = e.clientX;
+    let posY = e.clientY;
+
+    if (posX + menuWidth > window.innerWidth - 12) {
+      posX = Math.max(12, window.innerWidth - menuWidth - 12);
+    }
+    if (posY + menuHeight > window.innerHeight - 12) {
+      posY = Math.max(12, window.innerHeight - menuHeight - 12);
+    }
+
+    contextMenu.style.left = `${posX}px`;
+    contextMenu.style.top = `${posY}px`;
+  });
+
+  // Hide on click outside, Escape key, viewport scroll, or window resize
+  window.addEventListener('click', (e) => {
+    if (!contextMenu.contains(e.target)) {
+      hideContextMenu();
+    }
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') hideContextMenu();
+  });
+
+  viewportContainer?.addEventListener('scroll', hideContextMenu);
+  window.addEventListener('resize', hideContextMenu);
+
+  // Dispatch context menu actions
+  contextMenu.querySelectorAll('.context-menu-item').forEach((item) => {
+    item.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      hideContextMenu();
+      const action = item.dataset.action;
+
+      switch (action) {
+        case 'copy':
+          document.getElementById('btn-copy-clipboard')?.click();
+          break;
+
+        case 'save':
+          btnDownloadPrimary?.click();
+          break;
+
+        case 'pdf':
+          openModal('modal-pdf');
+          break;
+
+        case 'auto-crop':
+          await handleAutoCrop();
+          break;
+
+        case 'crop-tool':
+          if (editorToolbar.classList.contains('hidden')) {
+            btnToggleEditor?.click();
+          }
+          document.querySelector('.editor-tool-btn[data-tool="crop"]')?.click();
+          break;
+
+        case 'toggle-editor':
+          btnToggleEditor?.click();
+          break;
+
+        case 'undo':
+          editor?.undo();
+          break;
+
+        case 'redo':
+          editor?.redo();
+          break;
+
+        case 'rotate':
+          editor?.rotate(90);
+          break;
+
+        case 'flip':
+          editor?.flip(true);
+          break;
+
+        case 'clear':
+          btnClear?.click();
+          break;
+
+        case 'fit':
+          fitToScreen();
+          break;
+
+        case 'zoom100':
+          setZoom(1.0);
+          break;
+      }
+    });
   });
 }
 

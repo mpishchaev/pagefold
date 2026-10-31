@@ -828,6 +828,22 @@
       return true;
     }
 
+    if (message.action === 'BEFORE_SNAP') {
+      if (hudElement) {
+        hudElement.style.setProperty('display', 'none', 'important');
+      }
+      sendResponse({ hidden: true });
+      return true;
+    }
+
+    if (message.action === 'AFTER_SNAP') {
+      if (hudElement) {
+        hudElement.style.removeProperty('display');
+      }
+      sendResponse({ restored: true });
+      return true;
+    }
+
     if (message.action === 'START_SELECT_AREA') {
       startAreaSnipping();
       sendResponse({ started: true });
