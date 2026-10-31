@@ -779,22 +779,52 @@
 
   // Listen for messages from background script
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === 'PING') {
+      sendResponse({ pong: true, isTopFrame });
+      return true;
+    }
+
+    // Capture orchestration must only be processed by the top-level main frame
+    if (!isTopFrame) {
+      return false;
+    }
+
     if (message.action === 'PREPARE_FULL_PAGE') {
-      const data = prepareFullPageCapture(message.options);
-      sendResponse(data);
+      try {
+        const data = prepareFullPageCapture(message.options);
+        sendResponse(data);
+      } catch (err) {
+        console.error('PREPARE_FULL_PAGE error:', err);
+        sendResponse({
+          totalWidth: window.innerWidth,
+          totalHeight: Math.max(document.documentElement?.scrollHeight || 0, window.innerHeight),
+          viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight,
+          devicePixelRatio: window.devicePixelRatio || 1,
+          scrollTargetType: 'window',
+          title: document.title || 'Screenshot',
+          url: window.location.href
+        });
+      }
       return true;
     }
 
     if (message.action === 'SCROLL_TO') {
       scrollToPosition(message.x, message.y, message.hideFixed, message.progress).then((res) => {
         sendResponse(res);
+      }).catch((err) => {
+        sendResponse({ error: err?.message || 'Scroll failed' });
       });
       return true;
     }
 
     if (message.action === 'FINISH_FULL_PAGE') {
-      const res = finishFullPageCapture();
-      sendResponse(res);
+      try {
+        const res = finishFullPageCapture();
+        sendResponse(res);
+      } catch (e) {
+        sendResponse({ success: true });
+      }
       return true;
     }
 

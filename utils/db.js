@@ -3,6 +3,8 @@
  * Stores captures locally without quota limits
  */
 
+import { blobToDataURL } from './stitcher.js';
+
 const DB_NAME = 'OpenFullPageDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'captures';
@@ -57,12 +59,7 @@ export async function createThumbnail(dataUrl, maxWidth = 260) {
       const ctx = canvas.getContext('2d');
       ctx.drawImage(bitmap, 0, 0, w, h);
       const thumbBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.75 });
-      
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.readAsDataURL(thumbBlob);
-      });
+      return await blobToDataURL(thumbBlob);
     }
   } catch (e) {
     console.warn('OffscreenCanvas thumbnail failed, returning original/empty', e);

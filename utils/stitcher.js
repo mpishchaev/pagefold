@@ -48,6 +48,33 @@ function createCanvas(width, height) {
 }
 
 /**
+ * Safely convert Blob to Data URL in ANY context (Service Worker, Web Worker, or DOM)
+ * Avoids ReferenceError: FileReader is not defined in Manifest V3 Service Workers.
+ */
+export async function blobToDataURL(blob) {
+  if (typeof FileReader !== 'undefined') {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  // Pure ServiceWorker-safe conversion using ArrayBuffer and Base64
+  const buffer = await blob.arrayBuffer();
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  const chunkSize = 8192;
+  for (let i = 0; i < len; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+  }
+  const base64 = btoa(binary);
+  return `data:${blob.type || 'image/png'};base64,${base64}`;
+}
+
+/**
  * Convert canvas to Data URL
  */
 async function canvasToDataURL(canvas, format = 'png', quality = 0.92) {
@@ -55,11 +82,7 @@ async function canvasToDataURL(canvas, format = 'png', quality = 0.92) {
 
   if (canvas.convertToBlob) {
     const blob = await canvas.convertToBlob({ type: mimeType, quality });
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.readAsDataURL(blob);
-    });
+    return await blobToDataURL(blob);
   }
 
   if (canvas.toDataURL) {
@@ -94,13 +117,13 @@ export async function stitchSlices(slices, options) {
   const slicePixelHeight = firstImage.height;
 
   // Determine actual scale factor (devicePixelRatio)
-  // Options dpr might differ slightly due to zoom levels, so measure directly
-  const measuredDpr = slicePixelWidth / (options.totalWidth || slices[0].windowWidth || (slicePixelWidth / (options.devicePixelRatio || 1)));
-  const dpr = measuredDpr > 0 ? measuredDpr : (options.devicePixelRatio || 1);
+  const winWidth = slices[0].windowWidth || options.viewportWidth || (slicePixelWidth / (options.devicePixelRatio || 1));
+  const measuredDpr = winWidth > 0 ? (slicePixelWidth / winWidth) : (options.devicePixelRatio || 1);
+  const dpr = (options.devicePixelRatio && options.devicePixelRatio > 0) ? options.devicePixelRatio : (measuredDpr > 0 ? measuredDpr : 1);
 
   // Calculate final canvas dimensions in device pixels
-  let targetPixelWidth = Math.round(options.totalWidth * dpr);
-  let targetPixelHeight = Math.round(options.totalHeight * dpr);
+  let targetPixelWidth = slicePixelWidth;
+  let targetPixelHeight = Math.max(slicePixelHeight, Math.round(options.totalHeight * dpr));
 
   // Guard against Chromium canvas dimension caps (typically 32767px or ~268MP)
   const MAX_CANVAS_DIM = 32760;

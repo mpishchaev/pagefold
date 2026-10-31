@@ -15,19 +15,25 @@ let activeCaptures = new Map(); // tabId -> state
  */
 async function ensureContentScript(tabId) {
   try {
-    await chrome.tabs.sendMessage(tabId, { action: 'PING' });
+    const res = await chrome.tabs.sendMessage(tabId, { action: 'PING' }, { frameId: 0 });
+    if (res && res.pong) return;
   } catch (e) {
-    // If message fails, inject script and CSS dynamically into all frames
-    await chrome.scripting.insertCSS({
-      target: { tabId, allFrames: true },
-      files: ['content/overlay.css']
-    }).catch(() => {});
-
-    await chrome.scripting.executeScript({
-      target: { tabId, allFrames: true },
-      files: ['content/content.js']
-    }).catch(() => {});
+    // If ping fails, inject script and CSS dynamically into the main tab
   }
+
+  try {
+    await chrome.scripting.insertCSS({
+      target: { tabId },
+      files: ['content/overlay.css']
+    });
+  } catch (e) {}
+
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['content/content.js']
+    });
+  } catch (e) {}
 }
 
 /**
@@ -52,11 +58,11 @@ export async function captureFullPage(tab) {
   const settings = await getSettings();
 
   try {
-    // 1. Prepare page and get metrics
+    // 1. Prepare page and get metrics from top frame
     const metrics = await chrome.tabs.sendMessage(tabId, {
       action: 'PREPARE_FULL_PAGE',
       options: { hideFixedElements: settings.hideFixedElements }
-    });
+    }, { frameId: 0 });
 
     if (!metrics) {
       throw new Error('Failed to retrieve page metrics');
@@ -74,7 +80,7 @@ export async function captureFullPage(tab) {
     while (currentY < totalHeight) {
       const state = activeCaptures.get(tabId);
       if (state && state.cancelled) {
-        await chrome.tabs.sendMessage(tabId, { action: 'FINISH_FULL_PAGE' });
+        await chrome.tabs.sendMessage(tabId, { action: 'FINISH_FULL_PAGE' }, { frameId: 0 });
         activeCaptures.delete(tabId);
         return;
       }
@@ -88,7 +94,7 @@ export async function captureFullPage(tab) {
         y: currentY,
         hideFixed: settings.hideFixedElements,
         progress
-      });
+      }, { frameId: 0 });
 
       // Allow animations and lazy loads to settle
       await new Promise((r) => setTimeout(r, scrollDelay));
@@ -113,7 +119,7 @@ export async function captureFullPage(tab) {
     }
 
     // 3. Restore page to original state
-    await chrome.tabs.sendMessage(tabId, { action: 'FINISH_FULL_PAGE' });
+    await chrome.tabs.sendMessage(tabId, { action: 'FINISH_FULL_PAGE' }, { frameId: 0 });
     activeCaptures.delete(tabId);
 
     // 4. Stitch captured slices into one image
@@ -142,8 +148,14 @@ export async function captureFullPage(tab) {
     console.error('Full page capture failed:', err);
     activeCaptures.delete(tabId);
     try {
-      await chrome.tabs.sendMessage(tabId, { action: 'FINISH_FULL_PAGE' });
+      await chrome.tabs.sendMessage(tabId, { action: 'FINISH_FULL_PAGE' }, { frameId: 0 });
     } catch (e) {}
+    chrome.notifications?.create({
+      type: 'basic',
+      iconUrl: 'icons/icon48.png',
+      title: 'OpenFullPage',
+      message: 'Full page capture failed: ' + (err?.message || String(err))
+    });
   }
 }
 
