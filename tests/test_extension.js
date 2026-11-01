@@ -216,6 +216,65 @@ for (let x = 10; x <= 990; x++) {
   assert(cropW === 331, `15px total width padding applied accurately (${cropW} === 331)`);
 }
 
+// Test Mode Background Detection with Colored Navbar (Scenario B)
+console.log('\n--- 8. Testing Mode Background Detection with Navbar ---');
+{
+  const width = 1200;
+  const height = 800;
+  const data = new Uint8ClampedArray(width * height * 4);
+  data.fill(255); // Body is white
+
+  // Black navbar at top (Y from 0 to 50 across full width)
+  for (let y = 0; y < 50; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      data[idx] = 30; data[idx+1] = 30; data[idx+2] = 30;
+    }
+  }
+
+  // Centered content column from X=250 to X=950, Y=80 to Y=700
+  for (let y = 80; y < 700; y++) {
+    for (let x = 250; x < 950; x++) {
+      const idx = (y * width + x) * 4;
+      data[idx] = 40; data[idx+1] = 40; data[idx+2] = 40;
+    }
+  }
+
+  // Sample border margins using histogram mode
+  const colorHistogram = new Map();
+  function sample(r, g, b, a) {
+    if (a < 30) return;
+    const qr = Math.min(255, (r >> 3) << 3);
+    const qg = Math.min(255, (g >> 3) << 3);
+    const qb = Math.min(255, (b >> 3) << 3);
+    const key = (qr << 16) | (qg << 8) | qb;
+    colorHistogram.set(key, (colorHistogram.get(key) || 0) + 1);
+  }
+
+  for (let y = 0; y < height; y += 4) {
+    for (let x = 0; x < 10; x++) {
+      const idxL = (y * width + x) * 4;
+      sample(data[idxL], data[idxL+1], data[idxL+2], data[idxL+3]);
+      const idxR = (y * width + (width - 1 - x)) * 4;
+      sample(data[idxR], data[idxR+1], data[idxR+2], data[idxR+3]);
+    }
+  }
+
+  let bestCount = 0;
+  let modeKey = 0;
+  for (const [key, count] of colorHistogram.entries()) {
+    if (count > bestCount) {
+      bestCount = count;
+      modeKey = key;
+    }
+  }
+  const bgR = (modeKey >> 16) & 255;
+  const bgG = (modeKey >> 8) & 255;
+  const bgB = modeKey & 255;
+
+  assert(bgR >= 240 && bgG >= 240 && bgB >= 240, `Histogram mode accurately identifies white body as background (${bgR},${bgG},${bgB}) despite black navbar`);
+}
+
 console.log(`\n========================================`);
 console.log(`🎉 ALL ${passedTests} OF ${totalTests} VERIFICATION CHECKS PASSED!`);
 console.log(`========================================\n`);

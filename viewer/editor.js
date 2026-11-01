@@ -657,100 +657,100 @@ export class ScreenshotEditor {
     const imgData = this.baseCtx.getImageData(0, 0, width, height);
     const data = imgData.data;
 
-    // 1. Detect Background Color
-    // Sample along left and right margins and corners
-    const borderSamples = [];
-    const sampleStepY = Math.max(1, Math.floor(height / 60));
-    const sampleInset = Math.min(6, Math.floor(width / 10));
-
-    for (let y = 0; y < height; y += sampleStepY) {
-      for (let dx = 0; dx < sampleInset; dx++) {
-        // Left margin
-        const idxL = (y * width + dx) * 4;
-        borderSamples.push([data[idxL], data[idxL + 1], data[idxL + 2], data[idxL + 3]]);
-        // Right margin
-        const idxR = (y * width + (width - 1 - dx)) * 4;
-        borderSamples.push([data[idxR], data[idxR + 1], data[idxR + 2], data[idxR + 3]]);
-      }
-    }
-
-    if (borderSamples.length === 0) return null;
-
-    let sumR = 0, sumG = 0, sumB = 0, sumA = 0;
-    for (let i = 0; i < borderSamples.length; i++) {
-      sumR += borderSamples[i][0];
-      sumG += borderSamples[i][1];
-      sumB += borderSamples[i][2];
-      sumA += borderSamples[i][3];
-    }
-    const bgR = Math.round(sumR / borderSamples.length);
-    const bgG = Math.round(sumG / borderSamples.length);
-    const bgB = Math.round(sumB / borderSamples.length);
-    const bgA = Math.round(sumA / borderSamples.length);
-
-    const isBgTransparent = (bgA < 30);
-    const colorDist = (r, g, b, a) => {
-      if (isBgTransparent) {
-        return a > 30 ? 100 : 0;
-      }
-      if (a < 30) return 100;
-      return Math.abs(r - bgR) + Math.abs(g - bgG) + Math.abs(b - bgB);
+    // 1. Detect Background Color using a Quantized Histogram Mode
+    // We sample border margins (left, right, top, bottom) to find the MOST FREQUENT color.
+    // This correctly handles pages with black/colored navbars, banners, or footers without skewing the background.
+    const colorHistogram = new Map();
+    const sampleColor = (r, g, b, a) => {
+      if (a < 30) return; // transparent
+      const qr = Math.min(255, (r >> 3) << 3);
+      const qg = Math.min(255, (g >> 3) << 3);
+      const qb = Math.min(255, (b >> 3) << 3);
+      const key = (qr << 16) | (qg << 8) | qb;
+      colorHistogram.set(key, (colorHistogram.get(key) || 0) + 1);
     };
 
-    const threshold = 22; // color difference threshold
-    const isContentPixel = (r, g, b, a) => colorDist(r, g, b, a) > threshold;
+    const stepY = Math.max(1, Math.floor(height / 80));
+    const inset = Math.min(15, Math.max(4, Math.floor(width * 0.015)));
 
-    // 2. Row Analysis: identify content span and detect full-width stretched lines/bars
-    const rowContentCount = new Int32Array(height);
-    const rowMinX = new Int32Array(height).fill(-1);
-    const rowMaxX = new Int32Array(height).fill(-1);
-    const isFullWidthRow = new Uint8Array(height);
+    // Sample along left and right borders
+    for (let y = 0; y < height; y += stepY) {
+      for (let x = 0; x < inset; x++) {
+        const idxL = (y * width + x) * 4;
+        sampleColor(data[idxL], data[idxL + 1], data[idxL + 2], data[idxL + 3]);
+        const idxR = (y * width + (width - 1 - x)) * 4;
+        sampleColor(data[idxR], data[idxR + 1], data[idxR + 2], data[idxR + 3]);
+      }
+    }
 
+    // Also sample top and bottom border lines (step 10)
+    for (let x = 0; x < width; x += 10) {
+      for (let y = 0; y < 4; y++) {
+        const idxT = (y * width + x) * 4;
+        sampleColor(data[idxT], data[idxT + 1], data[idxT + 2], data[idxT + 3]);
+        const idxB = ((height - 1 - y) * width + x) * 4;
+        sampleColor(data[idxB], data[idxB + 1], data[idxB + 2], data[idxB + 3]);
+      }
+    }
+
+    let bestCount = 0;
+    let modeKey = (255 << 16) | (255 << 8) | 255;
+    for (const [key, count] of colorHistogram.entries()) {
+      if (count > bestCount) {
+        bestCount = count;
+        modeKey = key;
+      }
+    }
+    const bgR = (modeKey >> 16) & 255;
+    const bgG = (modeKey >> 8) & 255;
+    const bgB = modeKey & 255;
+
+    const isContentPixel = (r, g, b, a) => {
+      if (a < 30) return true;
+      return (Math.abs(r - bgR) + Math.abs(g - bgG) + Math.abs(b - bgB)) > 26;
+    };
+
+    // 2. Identify Edge-to-Edge rows (e.g. navbars, stretched 1px divider lines, wide footer bars)
+    // A row is edge-to-edge if it contains content near the left margin AND near the right margin
+    const isEdgeToEdge = new Uint8Array(height);
+    const leftEdgeBound = Math.max(6, Math.floor(width * 0.035));
+    const rightEdgeBound = Math.min(width - 7, Math.floor(width * 0.965));
+
+    let edgeToEdgeCount = 0;
     for (let y = 0; y < height; y++) {
-      let firstX = -1;
-      let lastX = -1;
-      let count = 0;
+      let hasLeft = false;
+      let hasRight = false;
       const rowOffset = y * width * 4;
 
-      for (let x = 0; x < width; x++) {
+      for (let x = 0; x < leftEdgeBound; x++) {
         const idx = rowOffset + (x * 4);
         if (isContentPixel(data[idx], data[idx + 1], data[idx + 2], data[idx + 3])) {
-          count++;
-          if (firstX === -1) firstX = x;
-          lastX = x;
+          hasLeft = true;
+          break;
         }
       }
-
-      rowContentCount[y] = count;
-      rowMinX[y] = firstX;
-      rowMaxX[y] = lastX;
-
-      if (firstX !== -1) {
-        const span = lastX - firstX + 1;
-        // If content spans > 65% of width or pixel density is > 60%
-        if (span > width * 0.65 || count > width * 0.60) {
-          isFullWidthRow[y] = 1;
+      if (hasLeft) {
+        for (let x = rightEdgeBound; x < width; x++) {
+          const idx = rowOffset + (x * 4);
+          if (isContentPixel(data[idx], data[idx + 1], data[idx + 2], data[idx + 3])) {
+            hasRight = true;
+            break;
+          }
         }
+      }
+      if (hasLeft && hasRight) {
+        isEdgeToEdge[y] = 1;
+        edgeToEdgeCount++;
       }
     }
 
-    // Check if we have standard (non-full-width) content rows
-    let standardRowCount = 0;
-    let totalContentRows = 0;
-    for (let y = 0; y < height; y++) {
-      if (rowContentCount[y] > 0) {
-        totalContentRows++;
-        if (!isFullWidthRow[y]) standardRowCount++;
-      }
-    }
+    // Only filter edge-to-edge rows if the page is not mostly full-bleed (<85%)
+    const filterEdgeToEdge = (edgeToEdgeCount < height * 0.85);
 
-    // Only filter out full-width rows if there are sufficient standard content rows
-    const filterFullWidth = (totalContentRows > 0 && standardRowCount >= totalContentRows * 0.05);
-
-    // 3. Column Analysis: count content pixels per column
+    // 3. Column density ignoring edge-to-edge rows
     const colDensity = new Int32Array(width);
     for (let y = 0; y < height; y++) {
-      if (filterFullWidth && isFullWidthRow[y]) continue; // ignore stretched dividers for column detection
+      if (filterEdgeToEdge && isEdgeToEdge[y]) continue; // ignore stretched headers and divider rules
       const rowOffset = y * width * 4;
       for (let x = 0; x < width; x++) {
         const idx = rowOffset + (x * 4);
@@ -761,9 +761,9 @@ export class ScreenshotEditor {
     }
 
     // Find column bounds [minX, maxX]
+    const colNoiseThreshold = Math.max(2, Math.floor(height * 0.004));
     let minX = -1;
     let maxX = -1;
-    const colNoiseThreshold = Math.max(1, Math.floor(height * 0.003));
 
     for (let x = 0; x < width; x++) {
       if (colDensity[x] >= colNoiseThreshold) {
@@ -772,12 +772,16 @@ export class ScreenshotEditor {
       }
     }
 
-    // If no columns detected using filtered rows, fall back to all content rows
+    // Fallback if no columns detected using filtered rows
     if (minX === -1 || maxX === -1 || maxX <= minX) {
       for (let y = 0; y < height; y++) {
-        if (rowMinX[y] !== -1) {
-          if (minX === -1 || rowMinX[y] < minX) minX = rowMinX[y];
-          if (maxX === -1 || rowMaxX[y] > maxX) maxX = rowMaxX[y];
+        const rowOffset = y * width * 4;
+        for (let x = 0; x < width; x++) {
+          const idx = rowOffset + (x * 4);
+          if (isContentPixel(data[idx], data[idx + 1], data[idx + 2], data[idx + 3])) {
+            if (minX === -1 || x < minX) minX = x;
+            if (maxX === -1 || x > maxX) maxX = x;
+          }
         }
       }
     }
@@ -787,8 +791,7 @@ export class ScreenshotEditor {
       return null;
     }
 
-    // 4. Vertical Analysis: find minY and maxY
-    // Scan rows from top and bottom that contain content within [minX, maxX] (plus slight margin)
+    // 4. Vertical Analysis: find minY and maxY within detected column range
     let minY = -1;
     let maxY = -1;
     const scanLeft = Math.max(0, minX - 10);
@@ -833,7 +836,7 @@ export class ScreenshotEditor {
       maxX,
       minY,
       maxY,
-      bg: { r: bgR, g: bgG, b: bgB, a: bgA }
+      bg: { r: bgR, g: bgG, b: bgB }
     };
   }
 

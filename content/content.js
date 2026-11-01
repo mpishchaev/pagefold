@@ -331,11 +331,17 @@
     // 2. Detect the primary scrollable target (window, full-page iframe, or inner scrollable container)
     activeScrollTarget = detectPrimaryScrollTarget();
 
-    // 3. Save and hide scrollbars
-    origHtmlOverflow = document.documentElement.style.overflow;
-    origBodyOverflow = document.body.style.overflow;
-    document.documentElement.style.setProperty('overflow', 'hidden', 'important');
-    document.body.style.setProperty('overflow', 'hidden', 'important');
+    // 3. Hide scrollbars cleanly without breaking window.scrollTo
+    let scrollbarKiller = document.getElementById('openfullpage-scrollbar-killer');
+    if (!scrollbarKiller) {
+      scrollbarKiller = document.createElement('style');
+      scrollbarKiller.id = 'openfullpage-scrollbar-killer';
+      scrollbarKiller.textContent = `
+        ::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+        html, body { scrollbar-width: none !important; -ms-overflow-style: none !important; }
+      `;
+      (document.head || document.documentElement).appendChild(scrollbarKiller);
+    }
 
     // 4. Find fixed/sticky elements
     if (options.hideFixedElements !== false) {
@@ -369,8 +375,12 @@
       }
     } else if (activeScrollTarget && activeScrollTarget.type === 'element') {
       activeScrollTarget.target.scrollTop = y;
+      activeScrollTarget.target.scrollLeft = x;
     } else {
       window.scrollTo(x, y);
+      if (document.documentElement) document.documentElement.scrollTop = y;
+      if (document.body) document.body.scrollTop = y;
+      if (document.scrollingElement) document.scrollingElement.scrollTop = y;
     }
 
     if (hideFixed && y > 0) {
@@ -381,14 +391,14 @@
       updateHudProgress(progress);
     }
 
-    // Force reflow and wait two animation frames for WebGL / A-Frame and dynamic content
+    // Force reflow and wait for WebGL / dynamic content
     return new Promise((resolve) => {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           setTimeout(() => {
             resolve({
-              actualX: window.scrollX,
-              actualY: window.scrollY
+              actualX: window.scrollX || document.documentElement?.scrollLeft || 0,
+              actualY: window.scrollY || document.documentElement?.scrollTop || 0
             });
           }, 35);
         });
@@ -403,17 +413,10 @@
     restoreFixedElements();
     restoreExpandedIframes();
 
-    // Restore scrollbars
-    if (origHtmlOverflow) {
-      document.documentElement.style.overflow = origHtmlOverflow;
-    } else {
-      document.documentElement.style.removeProperty('overflow');
-    }
-
-    if (origBodyOverflow) {
-      document.body.style.overflow = origBodyOverflow;
-    } else {
-      document.body.style.removeProperty('overflow');
+    // Remove scrollbar killer style
+    const killer = document.getElementById('openfullpage-scrollbar-killer');
+    if (killer && killer.parentNode) {
+      killer.parentNode.removeChild(killer);
     }
 
     // Restore original scroll
@@ -830,18 +833,18 @@
 
     if (message.action === 'BEFORE_SNAP') {
       if (hudElement) {
-        hudElement.style.setProperty('display', 'none', 'important');
+        hudElement.style.setProperty('visibility', 'hidden', 'important');
       }
       sendResponse({ hidden: true });
-      return true;
+      return;
     }
 
     if (message.action === 'AFTER_SNAP') {
       if (hudElement) {
-        hudElement.style.removeProperty('display');
+        hudElement.style.removeProperty('visibility');
       }
       sendResponse({ restored: true });
-      return true;
+      return;
     }
 
     if (message.action === 'START_SELECT_AREA') {

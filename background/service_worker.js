@@ -11,6 +11,22 @@ import { stitchSlices, cropImage } from '../utils/stitcher.js';
 let activeCaptures = new Map(); // tabId -> state
 
 /**
+ * Safely capture visible tab with auto-retry and backoff
+ * to prevent MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND quota exceeded errors
+ */
+async function safeCaptureVisibleTab(windowId, options = { format: 'png' }, maxRetries = 4) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await chrome.tabs.captureVisibleTab(windowId, options);
+    } catch (err) {
+      if (attempt === maxRetries) throw err;
+      console.warn(`captureVisibleTab throttled (attempt ${attempt}/${maxRetries}): ${err?.message || err}. Backing off...`);
+      await new Promise((r) => setTimeout(r, 350 * attempt));
+    }
+  }
+}
+
+/**
  * Ensure content script & styles are injected on target tab
  */
 async function ensureContentScript(tabId) {
@@ -70,7 +86,7 @@ export async function captureFullPage(tab) {
 
     const { totalWidth, totalHeight, viewportWidth, viewportHeight, devicePixelRatio } = metrics;
     const slices = [];
-    const scrollDelay = Math.max(50, settings.scrollDelay || 150);
+    const scrollDelay = Math.max(120, settings.scrollDelay || 180);
 
     let currentY = 0;
     let sliceIndex = 0;
@@ -82,10 +98,17 @@ export async function captureFullPage(tab) {
       if (state && state.cancelled) {
         await chrome.tabs.sendMessage(tabId, { action: 'FINISH_FULL_PAGE' }, { frameId: 0 });
         activeCaptures.delete(tabId);
+        try { chrome.action.setBadgeText({ tabId, text: '' }); } catch (e) {}
         return;
       }
 
       const progress = Math.min(99, Math.round((currentY / totalHeight) * 100));
+
+      // Update badge progress
+      try {
+        chrome.action.setBadgeText({ tabId, text: `${progress}%` });
+        chrome.action.setBadgeBackgroundColor({ tabId, color: '#4F46E5' });
+      } catch (e) {}
 
       // Scroll to current step
       await chrome.tabs.sendMessage(tabId, {
@@ -104,8 +127,8 @@ export async function captureFullPage(tab) {
         await chrome.tabs.sendMessage(tabId, { action: 'BEFORE_SNAP' }, { frameId: 0 });
       } catch (e) {}
 
-      // Snap visible tab
-      const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
+      // Snap visible tab with auto-retry
+      const dataUrl = await safeCaptureVisibleTab(tab.windowId, { format: 'png' });
       slices.push({
         dataUrl,
         y: currentY,
@@ -127,6 +150,9 @@ export async function captureFullPage(tab) {
         currentY = Math.min(totalHeight - viewportHeight, currentY + viewportHeight);
       }
     }
+
+    // Clear badge
+    try { chrome.action.setBadgeText({ tabId, text: '' }); } catch (e) {}
 
     // 3. Restore page to original state
     await chrome.tabs.sendMessage(tabId, { action: 'FINISH_FULL_PAGE' }, { frameId: 0 });
@@ -157,6 +183,7 @@ export async function captureFullPage(tab) {
   } catch (err) {
     console.error('Full page capture failed:', err);
     activeCaptures.delete(tabId);
+    try { chrome.action.setBadgeText({ tabId, text: '' }); } catch (e) {}
     try {
       await chrome.tabs.sendMessage(tabId, { action: 'FINISH_FULL_PAGE' }, { frameId: 0 });
     } catch (e) {}
