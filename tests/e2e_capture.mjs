@@ -388,6 +388,25 @@ const scenarios = {
     check('tall: page state restored', (await p.evaluate(() => !document.getElementById('pagefold-hud') && !document.getElementById('pagefold-status'))));
     await p.close();
   },
+  async liveHud() {
+    // The HUD leaked into the first slice only on real, heavier pages (morlov.app
+    // did it about half the time), never on the local fixtures. Opt in with HUD_URL;
+    // six runs make a miss unlikely (~1.5%) but not impossible.
+    if (!process.env.HUD_URL) { console.log('SKIP  live HUD: set HUD_URL to run'); return; }
+    const p = await open(process.env.HUD_URL);
+    await p.waitForLoadState('networkidle');
+    for (let run = 1; run <= 6; run++) {
+      await p.bringToFront(); await p.waitForTimeout(300); // the viewer from the last run took focus
+      const n = await count();
+      await sw.evaluate(async (t) => { self.__openfp.captureFullPage(t); }, await tabId(p.url()));
+      const img = await latestAfter(n, 60000);
+      // The HUD (top: 24px to ~70px, centered) is near-black navy; sample under it
+      const under = img ? [img.mid, ...img.col.slice(3, 7)] : [];
+      const hud = under.filter(([r, g, b]) => r < 40 && g < 40 && b < 70);
+      check(`live HUD: not in first slice (run ${run})`, !!img && hud.length === 0, `hud px=${hud.length}/${under.length}`);
+    }
+    await p.close();
+  },
   async fullSpa() {
     const p = await open(base + '/spa');
     const n = await count();

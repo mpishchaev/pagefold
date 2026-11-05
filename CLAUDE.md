@@ -25,4 +25,5 @@ Run the e2e suite after touching `background/`, `content/` or `utils/stitcher.js
 - Use the `y` the page reports after scrolling, never the requested one.
 - A wrapper of the capture target must not be hidden as "fixed" (SPAs put the whole app in a fixed root).
 - `iframe.contentDocument` returns `null` for cross-origin frames rather than throwing.
+- Hiding the HUD before a snap: two rAFs are not enough for `captureVisibleTab` to see the new frame, so `BEFORE_SNAP` waits 100 ms more. Never use `transition: all` inside the HUD: an inherited `visibility: hidden` then transitions too and the element stays in the shot.
 - The element picker relies on `#pagefold-element-shield` taking all pointer events; hit testing briefly disables it.

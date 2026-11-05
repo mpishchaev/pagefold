@@ -1259,7 +1259,9 @@
         return;
       }
       hudElement.style.setProperty('visibility', 'hidden', 'important');
-      nextPaint().then(() => sendResponse({ hidden: true }));
+      // Two rAFs do not mean the browser has the new frame yet. Later slices get
+      // time from the captureVisibleTab pacing; the first one does not, so wait.
+      nextPaint().then(() => setTimeout(() => sendResponse({ hidden: true }), 100));
       return true;
     }
 

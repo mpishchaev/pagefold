@@ -83,7 +83,9 @@
   font-size: 12px !important;
   font-weight: 500 !important;
   cursor: pointer !important;
-  transition: all 0.15s ease !important;
+  /* not "all": an inherited visibility:hidden would transition too, and the button
+     would stay visible in the slice for 0.15s */
+  transition: background-color 0.15s ease, color 0.15s ease !important;
 }
 
 #pagefold-hud .openfp-cancel-btn:hover {
