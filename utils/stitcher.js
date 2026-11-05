@@ -93,8 +93,10 @@ async function canvasToDataURL(canvas, format = 'png', quality = 0.92) {
 }
 
 /**
- * Stitch multiple captured vertical slices into one image
- * @param {Array<{ dataUrl: string, y: number, windowHeight: number }>} slices
+ * Stitch multiple captured vertical slices into one image.
+ * `clip` is the part of the screenshot to use and `y` its position in the
+ * result; without a clip the whole screenshot is drawn. All in CSS pixels.
+ * @param {Array<{ dataUrl: string, y: number, windowWidth: number, clip?: { x: number, y: number, width: number, height: number } }>} slices
  * @param {{ totalWidth: number, totalHeight: number, devicePixelRatio: number, format: string, quality: number }} options
  */
 export async function stitchSlices(slices, options) {
@@ -103,7 +105,7 @@ export async function stitchSlices(slices, options) {
   }
 
   // If there's only 1 slice and it covers the whole target, return it directly
-  if (slices.length === 1 && !options.forceStitch) {
+  if (slices.length === 1 && !slices[0].clip && !options.forceStitch) {
     return {
       dataUrl: slices[0].dataUrl,
       width: Math.round(options.totalWidth * (options.devicePixelRatio || 1)),
@@ -118,12 +120,15 @@ export async function stitchSlices(slices, options) {
 
   // Determine actual scale factor (devicePixelRatio)
   const winWidth = slices[0].windowWidth || options.viewportWidth || (slicePixelWidth / (options.devicePixelRatio || 1));
-  const measuredDpr = winWidth > 0 ? (slicePixelWidth / winWidth) : (options.devicePixelRatio || 1);
-  const dpr = (options.devicePixelRatio && options.devicePixelRatio > 0) ? options.devicePixelRatio : (measuredDpr > 0 ? measuredDpr : 1);
+  const measuredDpr = winWidth > 0 ? (slicePixelWidth / winWidth) : 0;
+  // The page's ratio is exact, the measured one suffers from a rounded innerWidth,
+  // but only the measured one is right if the screenshot has a different scale
+  const reportedDpr = options.devicePixelRatio || 1;
+  const dpr = measuredDpr > 0 && Math.abs(measuredDpr / reportedDpr - 1) > 0.02 ? measuredDpr : reportedDpr;
 
   // Calculate final canvas dimensions in device pixels
-  let targetPixelWidth = slicePixelWidth;
-  let targetPixelHeight = Math.max(slicePixelHeight, Math.round(options.totalHeight * dpr));
+  let targetPixelWidth = slices[0].clip ? Math.round(options.totalWidth * dpr) : slicePixelWidth;
+  let targetPixelHeight = Math.round(options.totalHeight * dpr);
 
   // Guard against Chromium canvas dimension caps (typically 32767px or ~268MP)
   const MAX_CANVAS_DIM = 32760;
@@ -143,24 +148,17 @@ export async function stitchSlices(slices, options) {
   ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, targetPixelWidth, targetPixelHeight);
 
-  // Draw first slice
-  ctx.drawImage(firstImage, 0, 0);
-
-  // Draw subsequent slices
-  for (let i = 1; i < slices.length; i++) {
+  for (let i = 0; i < slices.length; i++) {
     const slice = slices[i];
-    const img = await loadImage(slice.dataUrl);
+    const img = i === 0 ? firstImage : await loadImage(slice.dataUrl);
 
-    // Calculate vertical destination in device pixels
-    let destY = Math.round(slice.y * dpr);
+    const clip = slice.clip || { x: 0, y: 0, width: img.width / dpr, height: img.height / dpr };
+    const sx = Math.round(clip.x * dpr);
+    const sy = Math.round(clip.y * dpr);
+    const sw = Math.min(img.width, Math.round((clip.x + clip.width) * dpr)) - sx;
+    const sh = Math.min(img.height, Math.round((clip.y + clip.height) * dpr)) - sy;
 
-    // If this is the last slice and it overshoots the bottom, place it anchored at bottom
-    if (i === slices.length - 1 && destY + slicePixelHeight > targetPixelHeight) {
-      destY = targetPixelHeight - slicePixelHeight;
-    }
-
-    // Draw slice
-    ctx.drawImage(img, 0, destY);
+    ctx.drawImage(img, sx, sy, sw, sh, 0, Math.round(slice.y * dpr), sw, sh);
   }
 
   // Convert to output data URL

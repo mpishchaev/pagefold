@@ -102,9 +102,12 @@ export async function saveCapture(capture) {
     try {
       thumbnail = await createThumbnail(capture.dataUrl, 260);
     } catch (e) {
-      thumbnail = capture.dataUrl;
+      thumbnail = '';
     }
   }
+
+  // Strings count against IndexedDB's ~133 MB value limit, Blobs are stored aside
+  const imageBlob = capture.dataUrl ? await (await fetch(capture.dataUrl)).blob() : null;
 
   const record = {
     id,
@@ -112,9 +115,9 @@ export async function saveCapture(capture) {
     title: capture.title || 'Untitled Screenshot',
     url: capture.url || '',
     dimensions: capture.dimensions || { width: 0, height: 0 },
-    dataUrl: capture.dataUrl,
+    imageBlob,
     thumbnail: thumbnail || '',
-    fileSize: capture.fileSize || (capture.dataUrl ? Math.round(capture.dataUrl.length * 0.75) : 0),
+    fileSize: imageBlob ? imageBlob.size : 0,
     format: capture.format || 'png',
     type: capture.type || 'full' // 'full' | 'visible' | 'selected' | 'element'
   };
@@ -122,10 +125,11 @@ export async function saveCapture(capture) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
-    const req = store.put(record);
+    store.put(record);
 
-    req.onsuccess = () => resolve(record);
-    req.onerror = () => reject(req.error);
+    // A too large value aborts the transaction without failing the request
+    tx.oncomplete = () => resolve({ ...record, dataUrl: capture.dataUrl });
+    tx.onabort = () => reject(tx.error || new Error('Could not save the capture'));
   });
 }
 
@@ -134,7 +138,7 @@ export async function saveCapture(capture) {
  */
 export async function getCapture(id) {
   const db = await openDatabase();
-  return new Promise((resolve, reject) => {
+  const record = await new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readonly');
     const store = tx.objectStore(STORE_NAME);
     const req = store.get(id);
@@ -142,11 +146,18 @@ export async function getCapture(id) {
     req.onsuccess = () => resolve(req.result || null);
     req.onerror = () => reject(req.error);
   });
+
+  // Captures saved by older versions still hold a dataUrl
+  if (record?.imageBlob) {
+    const { imageBlob, ...capture } = record;
+    return { ...capture, dataUrl: await blobToDataURL(imageBlob) };
+  }
+  return record;
 }
 
 /**
  * Get all captures sorted by newest first
- * @param {boolean} includeFullData - whether to include large dataUrl
+ * @param {boolean} includeFullData - whether to include the image itself
  */
 export async function getAllCaptures(includeFullData = false) {
   const db = await openDatabase();
@@ -162,7 +173,7 @@ export async function getAllCaptures(includeFullData = false) {
       if (cursor) {
         const item = cursor.value;
         if (!includeFullData) {
-          const { dataUrl, ...summary } = item;
+          const { dataUrl, imageBlob, ...summary } = item;
           list.push(summary);
         } else {
           list.push(item);

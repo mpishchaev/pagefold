@@ -60,6 +60,32 @@ export async function saveSettings(partial) {
   });
 }
 
+const MAX_DEBUG_LOG_ENTRIES = 300;
+let debugLogQueue = Promise.resolve();
+
+/**
+ * Add an entry to the local capture log. It only leaves the browser if the
+ * user copies it from the popup.
+ */
+export function appendDebugLog(event, data = {}) {
+  debugLogQueue = debugLogQueue.then(async () => {
+    const { debugLog = [] } = await chrome.storage.local.get('debugLog');
+    debugLog.push({ time: new Date().toISOString(), event, ...data });
+    await chrome.storage.local.set({ debugLog: debugLog.slice(-MAX_DEBUG_LOG_ENTRIES) });
+  }).catch((err) => console.warn('Debug log write failed:', err));
+  return debugLogQueue;
+}
+
+export async function getDebugLogText() {
+  const { debugLog = [] } = await chrome.storage.local.get('debugLog');
+  const header = {
+    version: chrome.runtime.getManifest().version,
+    userAgent: navigator.userAgent,
+    entries: debugLog.length
+  };
+  return JSON.stringify({ ...header, log: debugLog }, null, 1);
+}
+
 /**
  * Clean string for safe filesystem filename
  */

@@ -30,7 +30,8 @@
     "unlimitedStorage",
     "downloads",
     "scripting",
-    "contextMenus"
+    "contextMenus",
+    "notifications"
   ],
   "commands": {
     "capture_full_page": {

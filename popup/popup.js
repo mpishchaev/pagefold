@@ -2,7 +2,7 @@
  * OpenFullPage - Popup Script
  */
 
-import { getSettings, saveSettings } from '../utils/storage.js';
+import { getSettings, saveSettings, getDebugLogText } from '../utils/storage.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
   const btnFull = document.getElementById('btn-full-page');
@@ -29,25 +29,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     await saveSettings({ autoDownload: quickAutoDownload.checked });
   });
 
+  // Closing the popup right after sending can drop the message, so wait for the reply
+  const startCapture = async (action) => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    await chrome.runtime.sendMessage({ action, tabId: tab?.id });
+    window.close();
+  };
+
   // Action Triggers
-  btnFull?.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ action: 'CAPTURE_FULL_PAGE' });
-    window.close();
-  });
+  btnFull?.addEventListener('click', () => startCapture('CAPTURE_FULL_PAGE'));
+  btnVisible?.addEventListener('click', () => startCapture('CAPTURE_VISIBLE'));
+  btnArea?.addEventListener('click', () => startCapture('START_SELECT_AREA'));
+  btnElement?.addEventListener('click', () => startCapture('START_SELECT_ELEMENT'));
 
-  btnVisible?.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ action: 'CAPTURE_VISIBLE' });
-    window.close();
-  });
-
-  btnArea?.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ action: 'START_SELECT_AREA' });
-    window.close();
-  });
-
-  btnElement?.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ action: 'START_SELECT_ELEMENT' });
-    window.close();
+  const btnCopyLog = document.getElementById('btn-copy-debug-log');
+  btnCopyLog?.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(await getDebugLogText());
+      btnCopyLog.textContent = 'Copied ✓';
+    } catch (err) {
+      btnCopyLog.textContent = 'Copy failed';
+    }
   });
 
   btnHistory?.addEventListener('click', () => {

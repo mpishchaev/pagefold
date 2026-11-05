@@ -11,6 +11,8 @@ import { exportToPdf } from './pdf-exporter.js';
 let editor = null;
 let currentCapture = null;
 let currentSettings = null;
+let editorSize = { width: 0, height: 0 };
+let saveQueue = Promise.resolve();
 let historyManager = null;
 let zoomLevel = 1.0;
 
@@ -69,10 +71,22 @@ async function initViewer() {
 
   // Initialize Canvas Editor
   editor = new ScreenshotEditor(canvasStage, {
-    onChange: ({ canUndo, canRedo, width, height }) => {
+    onChange: ({ canUndo, canRedo, isCropping, restored, width, height }) => {
+      const sizeChanged = width !== editorSize.width || height !== editorSize.height;
+      editorSize = { width, height };
+
       if (btnUndo) btnUndo.disabled = !canUndo;
       if (btnRedo) btnRedo.disabled = !canRedo;
       if (docDims) docDims.textContent = `${width} × ${height} px`;
+
+      if (!isCropping && !cropActionsBar.classList.contains('hidden')) {
+        cropActionsBar.classList.add('hidden');
+        highlightActiveTool('select');
+      }
+      if (restored && sizeChanged) {
+        fitToScreen();
+        persistCapture();
+      }
     }
   });
 
@@ -122,6 +136,24 @@ async function initViewer() {
 }
 
 /**
+ * Write the editor's image to the capture record. Crops and their undo can
+ * follow each other faster than a save finishes, so saves run one at a time
+ * and each takes the state at its turn.
+ */
+function persistCapture() {
+  saveQueue = saveQueue.then(async () => {
+    if (!currentCapture) return;
+    currentCapture.dimensions = { ...editorSize };
+    currentCapture.dataUrl = editor.getExportDataUrl('png');
+    await saveCapture(currentCapture);
+  }).catch((err) => {
+    console.error('Saving capture failed:', err);
+    showToast('Could not save the change to history', true);
+  });
+  return saveQueue;
+}
+
+/**
  * Load a capture record by ID
  */
 async function loadCaptureById(id) {
@@ -150,7 +182,7 @@ async function loadCaptureById(id) {
  * Load latest capture record from local database
  */
 async function loadLatestCapture() {
-  const all = await getAllCaptures(true);
+  const all = await getAllCaptures(false);
   if (all && all.length > 0) {
     currentCapture = all[0];
     await loadCaptureById(currentCapture.id);
@@ -222,14 +254,8 @@ async function handleAutoCrop() {
     return;
   }
 
-  if (currentCapture) {
-    currentCapture.dimensions = { width: res.width, height: res.height };
-    currentCapture.dataUrl = editor.getExportDataUrl('png');
-    await saveCapture(currentCapture);
-  }
-
-  if (docDims) docDims.textContent = `${res.width} × ${res.height} px`;
   fitToScreen();
+  persistCapture();
   showToast(`Auto-cropped to content (+15px padding: ${res.width} × ${res.height} px)! ✂️`);
 }
 
@@ -357,8 +383,8 @@ function setupEditorToolEvents() {
   toolButtons.forEach((btn) => {
     btn.addEventListener('click', () => {
       const tool = btn.dataset.tool;
-      highlightActiveTool(tool);
       editor.setTool(tool);
+      highlightActiveTool(tool);
 
       if (tool === 'crop') {
         cropActionsBar.classList.remove('hidden');
@@ -426,20 +452,14 @@ function setupEditorToolEvents() {
     editor.startCrop();
   });
 
-  btnApplyCrop?.addEventListener('click', async () => {
+  btnApplyCrop?.addEventListener('click', () => {
     const cropped = editor.applyCrop();
     if (cropped) {
       cropActionsBar.classList.add('hidden');
       highlightActiveTool('select');
 
-      if (currentCapture) {
-        currentCapture.dimensions = { width: cropped.width, height: cropped.height };
-        currentCapture.dataUrl = editor.getExportDataUrl('png');
-        await saveCapture(currentCapture);
-      }
-
-      if (docDims) docDims.textContent = `${cropped.width} × ${cropped.height} px`;
       fitToScreen();
+      persistCapture();
       showToast('Image cropped successfully! ✂️');
     }
   });
@@ -455,11 +475,7 @@ function setupEditorToolEvents() {
     }
   });
 
-  btnCancelCrop?.addEventListener('click', () => {
-    editor.cancelCrop();
-    cropActionsBar.classList.add('hidden');
-    highlightActiveTool('select');
-  });
+  btnCancelCrop?.addEventListener('click', () => editor.exitCrop());
 }
 
 /**
@@ -481,8 +497,8 @@ function setupContextMenu() {
     e.stopPropagation();
 
     // Enable/disable Undo & Redo items based on history state
-    if (ctxUndo) ctxUndo.disabled = !(editor && editor.historyIndex > 0);
-    if (ctxRedo) ctxRedo.disabled = !(editor && editor.historyIndex < editor.history.length - 1);
+    if (ctxUndo) ctxUndo.disabled = !editor?.canUndo;
+    if (ctxRedo) ctxRedo.disabled = !editor?.canRedo;
 
     contextMenu.classList.remove('hidden');
 

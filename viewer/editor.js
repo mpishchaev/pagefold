@@ -11,7 +11,7 @@ export class ScreenshotEditor {
 
     // Canvases
     this.baseCanvas = document.createElement('canvas');
-    this.baseCtx = this.baseCanvas.getContext('2d');
+    this.baseCtx = this.baseCanvas.getContext('2d', { willReadFrequently: true });
 
     this.overlayCanvas = document.createElement('canvas');
     this.overlayCtx = this.overlayCanvas.getContext('2d');
@@ -45,7 +45,8 @@ export class ScreenshotEditor {
     this.originalImage = null;
     this.undoStack = [];
     this.redoStack = [];
-    this.maxUndo = 30;
+    this.maxUndo = 100;
+    this.maxUndoBytes = 1024 * 1024 * 1024; // pixels kept alive by base snapshots
 
     // Annotations list (objects)
     this.annotations = [];
@@ -67,6 +68,8 @@ export class ScreenshotEditor {
     this.cropStartX = 0;
     this.cropStartY = 0;
     this.cropAspectRatio = null; // null | 1 | 16/9 | 4/3
+    this.cropUndoStack = []; // crop frame positions while crop mode is open
+    this.cropRedoStack = [];
 
     // Setup event listeners
     this.initEvents();
@@ -111,12 +114,25 @@ export class ScreenshotEditor {
   }
 
   /**
-   * Save canvas & annotations state for Undo/Redo
+   * Copy of the base image. A canvas rather than getImageData(): that one
+   * throws on long full-page captures, whose pixels do not fit in a typed array.
    */
-  saveState() {
-    const baseSnapshot = this.baseCtx.getImageData(0, 0, this.baseCanvas.width, this.baseCanvas.height);
+  snapshotBase() {
+    const snapshot = document.createElement('canvas');
+    snapshot.width = this.baseCanvas.width;
+    snapshot.height = this.baseCanvas.height;
+    snapshot.getContext('2d').drawImage(this.baseCanvas, 0, 0);
+    return snapshot;
+  }
+
+  /**
+   * Save canvas & annotations state for Undo/Redo.
+   * States share the base snapshot until the base image itself changes.
+   */
+  saveState({ baseChanged = true } = {}) {
+    const last = this.undoStack[this.undoStack.length - 1];
     const state = {
-      baseData: baseSnapshot,
+      base: !baseChanged && last ? last.base : this.snapshotBase(),
       width: this.baseCanvas.width,
       height: this.baseCanvas.height,
       annotations: JSON.parse(JSON.stringify(this.annotations)),
@@ -128,10 +144,36 @@ export class ScreenshotEditor {
       this.undoStack.shift();
     }
     this.redoStack = [];
+    this.trimHistory();
     this.notifyChange();
   }
 
+  /**
+   * Drop the oldest states once snapshots take too much memory,
+   * always keeping one step back
+   */
+  trimHistory() {
+    const bytesUsed = () => [...new Set(this.undoStack.map((state) => state.base))]
+      .reduce((sum, base) => sum + base.width * base.height * 4, 0);
+
+    while (this.undoStack.length > 2 && bytesUsed() > this.maxUndoBytes) {
+      this.undoStack.shift();
+    }
+  }
+
+  get canUndo() {
+    return this.isCropping || this.undoStack.length > 1;
+  }
+
+  get canRedo() {
+    return this.isCropping ? this.cropRedoStack.length > 0 : this.redoStack.length > 0;
+  }
+
   undo() {
+    if (this.isCropping) {
+      this.undoCropStep();
+      return;
+    }
     if (this.undoStack.length <= 1) return;
     const current = this.undoStack.pop();
     this.redoStack.push(current);
@@ -141,6 +183,10 @@ export class ScreenshotEditor {
   }
 
   redo() {
+    if (this.isCropping) {
+      this.redoCropStep();
+      return;
+    }
     if (this.redoStack.length === 0) return;
     const next = this.redoStack.pop();
     this.undoStack.push(next);
@@ -153,20 +199,22 @@ export class ScreenshotEditor {
     this.overlayCanvas.width = state.width;
     this.overlayCanvas.height = state.height;
 
-    this.baseCtx.putImageData(state.baseData, 0, 0);
+    this.baseCtx.drawImage(state.base, 0, 0);
     this.annotations = JSON.parse(JSON.stringify(state.annotations));
     this.currentStep = state.currentStep;
     this.selectedAnnotation = null;
 
     this.renderOverlay();
-    this.notifyChange();
+    this.notifyChange({ restored: true });
   }
 
-  notifyChange() {
+  notifyChange({ restored = false } = {}) {
     if (typeof this.options.onChange === 'function') {
       this.options.onChange({
-        canUndo: this.undoStack.length > 1,
-        canRedo: this.redoStack.length > 0,
+        canUndo: this.canUndo,
+        canRedo: this.canRedo,
+        isCropping: this.isCropping,
+        restored,
         width: this.baseCanvas.width,
         height: this.baseCanvas.height
       });
@@ -187,6 +235,7 @@ export class ScreenshotEditor {
     }
 
     this.renderOverlay();
+    this.notifyChange();
   }
 
   setColor(color) {
@@ -318,7 +367,7 @@ export class ScreenshotEditor {
             width: this.activeTool === 'highlighter' ? this.strokeWidth * 3 : this.strokeWidth,
             opacity: this.activeTool === 'highlighter' ? 0.45 : 1
           });
-          this.saveState();
+          this.saveState({ baseChanged: false });
         }
         this.activePath = [];
       } else if (this.activeTool === 'redact') {
@@ -344,29 +393,34 @@ export class ScreenshotEditor {
             width: this.strokeWidth,
             filled: this.fillShapes
           });
-          this.saveState();
+          this.saveState({ baseChanged: false });
         }
       }
 
       this.renderOverlay();
     });
 
-    // Keyboard Shortcuts (Ctrl+Z, Ctrl+Y, Esc)
+    // Keyboard Shortcuts (Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y, Esc)
     window.addEventListener('keydown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        e.preventDefault();
-        if (e.shiftKey) {
-          this.redo();
-        } else {
-          this.undo();
-        }
-      } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
-        e.preventDefault();
-        this.redo();
-      } else if (e.key === 'Escape') {
+      if (e.key === 'Escape') {
         if (this.isCropping) {
-          this.cancelCrop();
+          this.exitCrop();
         }
+        return;
+      }
+
+      // e.code, not e.key: the key is 'я' on a Russian layout and 'Z' with Shift
+      const isUndoKey = e.code === 'KeyZ';
+      const isRedoKey = e.code === 'KeyY';
+      if (!(e.ctrlKey || e.metaKey) || !(isUndoKey || isRedoKey)) return;
+      if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
+
+      e.preventDefault();
+      if (this.isDrawing) return;
+      if (isRedoKey || e.shiftKey) {
+        this.redo();
+      } else {
+        this.undo();
       }
     });
   }
@@ -432,7 +486,7 @@ export class ScreenshotEditor {
       radius: Math.max(16, this.strokeWidth * 4)
     });
     this.currentStep++;
-    this.saveState();
+    this.saveState({ baseChanged: false });
     this.renderOverlay();
   }
 
@@ -447,7 +501,7 @@ export class ScreenshotEditor {
       text: this.selectedSticker,
       fontSize: Math.max(28, this.strokeWidth * 6)
     });
-    this.saveState();
+    this.saveState({ baseChanged: false });
     this.renderOverlay();
   }
 
@@ -466,7 +520,7 @@ export class ScreenshotEditor {
         fontSize: this.fontSize,
         bg: true
       });
-      this.saveState();
+      this.saveState({ baseChanged: false });
       this.renderOverlay();
     }
   }
@@ -540,6 +594,10 @@ export class ScreenshotEditor {
    * Crop Mode
    */
   startCrop() {
+    if (!this.isCropping) {
+      this.cropUndoStack = [];
+      this.cropRedoStack = [];
+    }
     this.isCropping = true;
     const padX = Math.round(this.baseCanvas.width * 0.05);
     const padY = Math.round(this.baseCanvas.height * 0.05);
@@ -552,13 +610,48 @@ export class ScreenshotEditor {
     if (this.cropAspectRatio) {
       this.applyCropAspectRatio();
     }
+    this.commitCropStep();
     this.renderOverlay();
+  }
+
+  /**
+   * Record the crop frame as a Ctrl+Z step
+   */
+  commitCropStep() {
+    const last = this.cropUndoStack[this.cropUndoStack.length - 1];
+    const rect = this.normalizeRect(this.cropRect);
+    if (last && ['x', 'y', 'width', 'height'].every((key) => last[key] === rect[key])) return;
+
+    this.cropUndoStack.push(rect);
+    this.cropRedoStack = [];
+    this.notifyChange();
+  }
+
+  undoCropStep() {
+    // Nothing left to step back through: leave crop mode
+    if (this.cropUndoStack.length <= 1) {
+      this.exitCrop();
+      return;
+    }
+    this.cropRedoStack.push(this.cropUndoStack.pop());
+    this.cropRect = { ...this.cropUndoStack[this.cropUndoStack.length - 1] };
+    this.renderOverlay();
+    this.notifyChange();
+  }
+
+  redoCropStep() {
+    if (this.cropRedoStack.length === 0) return;
+    this.cropUndoStack.push(this.cropRedoStack.pop());
+    this.cropRect = { ...this.cropUndoStack[this.cropUndoStack.length - 1] };
+    this.renderOverlay();
+    this.notifyChange();
   }
 
   setCropAspectRatio(ratio) {
     this.cropAspectRatio = ratio;
     if (this.cropRect && ratio) {
       this.applyCropAspectRatio();
+      this.commitCropStep();
       this.renderOverlay();
     }
   }
@@ -639,6 +732,14 @@ export class ScreenshotEditor {
     this.activeTool = 'select';
     this.overlayCanvas.style.cursor = 'default';
     this.renderOverlay();
+  }
+
+  /**
+   * Leave crop mode on the editor's own initiative, so the UI has to follow
+   */
+  exitCrop() {
+    this.cancelCrop();
+    this.notifyChange();
   }
 
   /**
@@ -891,6 +992,7 @@ export class ScreenshotEditor {
       height: bounds.cropH
     };
 
+    this.commitCropStep();
     this.renderOverlay();
     return bounds;
   }
@@ -986,6 +1088,7 @@ export class ScreenshotEditor {
       if (this.cropRect.width < 10 || this.cropRect.height < 10) {
         this.startCrop();
       }
+      this.commitCropStep();
     }
     this.activeCropHandle = null;
     this.cropStartRect = null;
@@ -1059,7 +1162,7 @@ export class ScreenshotEditor {
    */
   clearAnnotations() {
     this.annotations = [];
-    this.saveState();
+    this.saveState({ baseChanged: false });
     this.renderOverlay();
   }
 

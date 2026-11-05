@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "node tests/test_extension.js",
+    "test:e2e": "node tests/e2e_capture.mjs",
     "generate-icons": "node icons/generate_icons.js"
   },
   "keywords": [],

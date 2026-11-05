@@ -4,22 +4,63 @@
  * context menus, and storage management.
  */
 
-import { getSettings, formatFilename } from '../utils/storage.js';
+import { getSettings, formatFilename, appendDebugLog } from '../utils/storage.js';
 import { saveCapture } from '../utils/db.js';
 import { stitchSlices, cropImage } from '../utils/stitcher.js';
 
 let activeCaptures = new Map(); // tabId -> state
+let lastCaptureTime = 0;
+
+// Chrome allows 2 captureVisibleTab calls per second
+const MIN_CAPTURE_INTERVAL = 550;
 
 /**
- * Safely capture visible tab with auto-retry and backoff
- * to prevent MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND quota exceeded errors
+ * Chrome stops a worker after 30 seconds without extension API calls, without
+ * any error. Stitching a long page can take that long, so keep the timer reset.
+ */
+async function withKeepAlive(work) {
+  const timer = setInterval(chrome.runtime.getPlatformInfo, 20 * 1000);
+  try {
+    return await work();
+  } finally {
+    clearInterval(timer);
+  }
+}
+
+/**
+ * Status line on the captured page. System notifications are often muted,
+ * so failures must not depend on them alone.
+ */
+async function showPageStatus(tabId, text, { isError = false } = {}) {
+  try {
+    await chrome.tabs.sendMessage(tabId, { action: 'SHOW_STATUS', text, isError }, { frameId: 0 });
+  } catch (e) {}
+}
+
+function notifyError(message) {
+  appendDebugLog('error', { message });
+  chrome.notifications.create({
+    type: 'basic',
+    iconUrl: chrome.runtime.getURL('icons/icon48.png'),
+    title: 'OpenFullPage',
+    message
+  });
+}
+
+/**
+ * Safely capture visible tab, pacing calls to stay under the
+ * MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND quota, with backoff if it is hit anyway
  */
 async function safeCaptureVisibleTab(windowId, options = { format: 'png' }, maxRetries = 4) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const wait = lastCaptureTime + MIN_CAPTURE_INTERVAL - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    lastCaptureTime = Date.now();
+
     try {
       return await chrome.tabs.captureVisibleTab(windowId, options);
     } catch (err) {
-      if (attempt === maxRetries) throw err;
+      if (attempt === maxRetries || !String(err?.message).includes('MAX_CAPTURE')) throw err;
       console.warn(`captureVisibleTab throttled (attempt ${attempt}/${maxRetries}): ${err?.message || err}. Backing off...`);
       await new Promise((r) => setTimeout(r, 350 * attempt));
     }
@@ -44,12 +85,54 @@ async function ensureContentScript(tabId) {
     });
   } catch (e) {}
 
-  try {
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      files: ['content/content.js']
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ['content/content.js']
+  });
+}
+
+/**
+ * Pages the extension is not allowed to touch
+ */
+function isRestrictedUrl(url = '') {
+  return /^(chrome|chrome-extension|edge|about|devtools|view-source):/.test(url)
+    || url.startsWith('https://chromewebstore.google.com');
+}
+
+/**
+ * Stitch slices into one image, save it and run post-capture actions
+ */
+async function saveStitched(tabId, slices, geometry, meta, settings) {
+  await showPageStatus(tabId, 'Processing screenshot…');
+  const startedAt = Date.now();
+  appendDebugLog('stitch-start', { type: meta.type, slices: slices.length, geometry });
+
+  await withKeepAlive(async () => {
+    const stitched = await stitchSlices(slices, {
+      ...geometry,
+      format: settings.format,
+      quality: (settings.quality || 92) / 100
     });
-  } catch (e) {}
+    appendDebugLog('stitched', {
+      ms: Date.now() - startedAt,
+      width: stitched.width,
+      height: stitched.height,
+      dataUrlLength: stitched.dataUrl.length
+    });
+
+    const record = await saveCapture({
+      ...meta,
+      dataUrl: stitched.dataUrl,
+      dimensions: { width: stitched.width, height: stitched.height },
+      format: settings.format
+    });
+    appendDebugLog('saved', { ms: Date.now() - startedAt, id: record.id });
+
+    await handlePostCapture(record, settings);
+    appendDebugLog('post-capture-done', { ms: Date.now() - startedAt });
+  });
+
+  await showPageStatus(tabId, '');
 }
 
 /**
@@ -60,20 +143,18 @@ export async function captureFullPage(tab) {
   const tabId = tab.id;
 
   // Cannot capture chrome internal or webstore pages
-  if (tab.url?.startsWith('chrome://') || tab.url?.startsWith('chrome-extension://') || tab.url?.startsWith('https://chromewebstore.google.com')) {
-    chrome.notifications?.create({
-      type: 'basic',
-      iconUrl: 'icons/icon48.png',
-      title: 'OpenFullPage',
-      message: 'Chrome security prevents capturing internal browser and Web Store pages.'
-    });
+  if (isRestrictedUrl(tab.url)) {
+    notifyError('Chrome security prevents capturing internal browser and Web Store pages.');
     return;
   }
 
-  await ensureContentScript(tabId);
-  const settings = await getSettings();
+  if (activeCaptures.has(tabId)) return;
+  activeCaptures.set(tabId, { cancelled: false });
 
   try {
+    await ensureContentScript(tabId);
+    const settings = await getSettings();
+
     // 1. Prepare page and get metrics from top frame
     const metrics = await chrome.tabs.sendMessage(tabId, {
       action: 'PREPARE_FULL_PAGE',
@@ -84,13 +165,15 @@ export async function captureFullPage(tab) {
       throw new Error('Failed to retrieve page metrics');
     }
 
-    const { totalWidth, totalHeight, viewportWidth, viewportHeight, devicePixelRatio } = metrics;
+    appendDebugLog('full-page-prepared', { url: tab.url, settings: { format: settings.format, autoDownload: settings.autoDownload, openViewer: settings.openViewer }, metrics });
+    const { totalWidth, totalHeight, viewportHeight, windowWidth, devicePixelRatio, clip } = metrics;
     const slices = [];
     const scrollDelay = Math.max(120, settings.scrollDelay || 180);
 
+    // Overlap slices by a pixel: fractional scale factors can otherwise leave seams
+    const scrollStep = Math.max(1, Math.floor(viewportHeight) - 1);
+
     let currentY = 0;
-    let sliceIndex = 0;
-    activeCaptures.set(tabId, { cancelled: false });
 
     // 2. Scroll and snap loop
     while (currentY < totalHeight) {
@@ -111,13 +194,17 @@ export async function captureFullPage(tab) {
       } catch (e) {}
 
       // Scroll to current step
-      await chrome.tabs.sendMessage(tabId, {
+      const scrolled = await chrome.tabs.sendMessage(tabId, {
         action: 'SCROLL_TO',
         x: 0,
         y: currentY,
         hideFixed: settings.hideFixedElements,
         progress
       }, { frameId: 0 });
+
+      // The page decides where a scroll really ends up
+      if (slices.length > 0 && scrolled?.actualY <= slices[slices.length - 1].y) break;
+      const actualY = scrolled?.actualY ?? currentY;
 
       // Allow animations and lazy loads to settle
       await new Promise((r) => setTimeout(r, scrollDelay));
@@ -129,26 +216,18 @@ export async function captureFullPage(tab) {
 
       // Snap visible tab with auto-retry
       const dataUrl = await safeCaptureVisibleTab(tab.windowId, { format: 'png' });
-      slices.push({
-        dataUrl,
-        y: currentY,
-        windowWidth: viewportWidth,
-        windowHeight: viewportHeight
-      });
+      slices.push({ dataUrl, y: actualY, windowWidth, clip });
 
       // Restore HUD visibility
       try {
         await chrome.tabs.sendMessage(tabId, { action: 'AFTER_SNAP' }, { frameId: 0 });
       } catch (e) {}
 
-      sliceIndex++;
-
       // Next scroll offset
-      if (currentY + viewportHeight >= totalHeight) {
+      if (actualY + viewportHeight >= totalHeight) {
         break; // reached bottom
-      } else {
-        currentY = Math.min(totalHeight - viewportHeight, currentY + viewportHeight);
       }
+      currentY = actualY + scrollStep;
     }
 
     // Clear badge
@@ -158,27 +237,12 @@ export async function captureFullPage(tab) {
     await chrome.tabs.sendMessage(tabId, { action: 'FINISH_FULL_PAGE' }, { frameId: 0 });
     activeCaptures.delete(tabId);
 
-    // 4. Stitch captured slices into one image
-    const stitched = await stitchSlices(slices, {
-      totalWidth,
-      totalHeight,
-      devicePixelRatio,
-      format: settings.format,
-      quality: (settings.quality || 92) / 100
-    });
-
-    // 5. Save capture record locally in IndexedDB
-    const record = await saveCapture({
+    // 4. Stitch, save locally in IndexedDB and run post-capture actions
+    await saveStitched(tabId, slices, { totalWidth, totalHeight, devicePixelRatio }, {
       title: metrics.title || tab.title || 'Screenshot',
       url: metrics.url || tab.url || '',
-      dataUrl: stitched.dataUrl,
-      dimensions: { width: stitched.width, height: stitched.height },
-      format: settings.format,
       type: 'full'
-    });
-
-    // 6. Handle post-capture actions
-    await handlePostCapture(record, settings);
+    }, settings);
 
   } catch (err) {
     console.error('Full page capture failed:', err);
@@ -187,12 +251,9 @@ export async function captureFullPage(tab) {
     try {
       await chrome.tabs.sendMessage(tabId, { action: 'FINISH_FULL_PAGE' }, { frameId: 0 });
     } catch (e) {}
-    chrome.notifications?.create({
-      type: 'basic',
-      iconUrl: 'icons/icon48.png',
-      title: 'OpenFullPage',
-      message: 'Full page capture failed: ' + (err?.message || String(err))
-    });
+    const failure = 'Full page capture failed: ' + (err?.message || String(err));
+    notifyError(failure);
+    await showPageStatus(tabId, failure, { isError: true });
   }
 }
 
@@ -204,7 +265,7 @@ export async function captureVisible(tab) {
   const settings = await getSettings();
 
   try {
-    const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
+    const dataUrl = await safeCaptureVisibleTab(tab.windowId, { format: 'png' });
     const record = await saveCapture({
       title: tab.title || 'Screenshot',
       url: tab.url || '',
@@ -216,6 +277,7 @@ export async function captureVisible(tab) {
     await handlePostCapture(record, settings);
   } catch (err) {
     console.error('Visible capture failed:', err);
+    notifyError('Capture failed: ' + (err?.message || String(err)));
   }
 }
 
@@ -223,18 +285,93 @@ export async function captureVisible(tab) {
  * Start selected area snipping
  */
 export async function startSelectArea(tab) {
-  if (!tab || !tab.id) return;
-  await ensureContentScript(tab.id);
-  await chrome.tabs.sendMessage(tab.id, { action: 'START_SELECT_AREA' });
+  await startPicker(tab, 'START_SELECT_AREA');
 }
 
 /**
  * Start DOM element selection
  */
 export async function startSelectElement(tab) {
+  await startPicker(tab, 'START_SELECT_ELEMENT');
+}
+
+async function startPicker(tab, action) {
   if (!tab || !tab.id) return;
-  await ensureContentScript(tab.id);
-  await chrome.tabs.sendMessage(tab.id, { action: 'START_SELECT_ELEMENT' });
+  if (isRestrictedUrl(tab.url)) {
+    notifyError('Chrome security prevents capturing internal browser and Web Store pages.');
+    return;
+  }
+
+  try {
+    await ensureContentScript(tab.id);
+    await chrome.tabs.sendMessage(tab.id, { action }, { frameId: 0 });
+  } catch (err) {
+    console.error('Could not start selection:', err);
+    notifyError('Could not start selection: ' + (err?.message || String(err)));
+  }
+}
+
+/**
+ * Capture the element picked in the page, scrolling through it if it is
+ * larger than the viewport
+ */
+async function handleElementConfirmed(meta, tab) {
+  const tabId = tab.id;
+  if (activeCaptures.has(tabId)) return;
+  activeCaptures.set(tabId, { cancelled: false });
+
+  try {
+    const settings = await getSettings();
+    const metrics = await chrome.tabs.sendMessage(tabId, {
+      action: 'PREPARE_ELEMENT',
+      options: { hideFixedElements: settings.hideFixedElements }
+    }, { frameId: 0 });
+    appendDebugLog('element-prepared', { metrics });
+    if (metrics.error) throw new Error(metrics.error);
+
+    const scrollDelay = Math.max(120, settings.scrollDelay || 180);
+    const slices = [];
+    let offsetY = 0;
+
+    while (true) {
+      const slice = await chrome.tabs.sendMessage(tabId, { action: 'SHOW_ELEMENT_SLICE', offsetY }, { frameId: 0 });
+      appendDebugLog('element-slice', { offsetY, slice });
+      if (slice.error) throw new Error(slice.error);
+      if (slice.scrolled) await new Promise((r) => setTimeout(r, scrollDelay));
+
+      const dataUrl = await safeCaptureVisibleTab(tab.windowId, { format: 'png' });
+      slices.push({ dataUrl, y: slice.y, windowWidth: metrics.windowWidth, clip: slice.clip });
+
+      // One pixel of overlap, see captureFullPage. No progress means the rest cannot be reached
+      const nextOffset = slice.y + slice.clip.height - 1;
+      if (slice.done || nextOffset <= offsetY) break;
+      offsetY = nextOffset;
+    }
+
+    await chrome.tabs.sendMessage(tabId, { action: 'FINISH_FULL_PAGE' }, { frameId: 0 });
+    activeCaptures.delete(tabId);
+
+    const last = slices[slices.length - 1];
+    await saveStitched(tabId, slices, {
+      totalWidth: slices[0].clip.width,
+      totalHeight: Math.min(metrics.totalHeight, last.y + last.clip.height),
+      devicePixelRatio: metrics.devicePixelRatio
+    }, {
+      title: meta.title || tab.title || 'Screenshot',
+      url: meta.url || tab.url || '',
+      type: 'element'
+    }, settings);
+  } catch (err) {
+    console.error('Element capture failed:', err);
+    appendDebugLog('element-failed', { message: err?.message, stack: err?.stack });
+    activeCaptures.delete(tabId);
+    try {
+      await chrome.tabs.sendMessage(tabId, { action: 'FINISH_FULL_PAGE' }, { frameId: 0 });
+    } catch (e) {}
+    const failure = 'Element capture failed: ' + (err?.message || String(err));
+    notifyError(failure);
+    await showPageStatus(tabId, failure, { isError: true });
+  }
 }
 
 /**
@@ -243,7 +380,7 @@ export async function startSelectElement(tab) {
 async function handleAreaConfirmed(rect, tab) {
   const settings = await getSettings();
   try {
-    const rawDataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
+    const rawDataUrl = await safeCaptureVisibleTab(tab.windowId, { format: 'png' });
     const cropped = await cropImage(rawDataUrl, rect);
 
     const record = await saveCapture({
@@ -258,6 +395,7 @@ async function handleAreaConfirmed(rect, tab) {
     await handlePostCapture(record, settings);
   } catch (err) {
     console.error('Area crop capture failed:', err);
+    notifyError('Capture failed: ' + (err?.message || String(err)));
   }
 }
 
@@ -279,7 +417,7 @@ async function handlePostCapture(record, settings) {
   // Open viewer tab (default true)
   if (settings.openViewer || !settings.autoDownload) {
     const viewerUrl = chrome.runtime.getURL(`viewer/viewer.html?id=${record.id}`);
-    chrome.tabs.create({ url: viewerUrl });
+    await chrome.tabs.create({ url: viewerUrl });
   }
 }
 
@@ -366,34 +504,19 @@ chrome.commands.onCommand.addListener(async (command) => {
 /**
  * Handle incoming runtime messages
  */
+const CAPTURE_ACTIONS = {
+  CAPTURE_FULL_PAGE: captureFullPage,
+  CAPTURE_VISIBLE: captureVisible,
+  START_SELECT_AREA: startSelectArea,
+  START_SELECT_ELEMENT: startSelectElement
+};
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'CAPTURE_FULL_PAGE') {
-    chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-      if (tab) captureFullPage(tab);
-    });
-    sendResponse({ started: true });
-    return true;
-  }
-
-  if (message.action === 'CAPTURE_VISIBLE') {
-    chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-      if (tab) captureVisible(tab);
-    });
-    sendResponse({ started: true });
-    return true;
-  }
-
-  if (message.action === 'START_SELECT_AREA') {
-    chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-      if (tab) startSelectArea(tab);
-    });
-    sendResponse({ started: true });
-    return true;
-  }
-
-  if (message.action === 'START_SELECT_ELEMENT') {
-    chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-      if (tab) startSelectElement(tab);
+  const startCapture = CAPTURE_ACTIONS[message.action];
+  if (startCapture) {
+    chrome.tabs.get(message.tabId).then(startCapture).catch((err) => {
+      console.error('Capture could not start:', err);
+      notifyError('Capture failed: ' + (err?.message || String(err)));
     });
     sendResponse({ started: true });
     return true;
@@ -401,6 +524,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.action === 'CAPTURE_AREA_CONFIRMED') {
     handleAreaConfirmed(message.rect, sender.tab);
+    sendResponse({ success: true });
+    return true;
+  }
+
+  if (message.action === 'DEBUG_LOG') {
+    appendDebugLog(message.event, { url: sender.tab?.url, ...message.data });
+    sendResponse({ logged: true });
+    return true;
+  }
+
+  if (message.action === 'CAPTURE_ELEMENT_CONFIRMED') {
+    handleElementConfirmed(message.meta, sender.tab);
     sendResponse({ success: true });
     return true;
   }
