@@ -116,4 +116,4 @@ Captures, history and settings stay in the user's browser; the extension
 makes no network requests. Certify all three statements (not sold, not used
 for unrelated purposes, not used for creditworthiness).
 
-**Privacy policy URL:** https://morlov.app/privacy/
+**Privacy policy URL:** https://github.com/mpishchaev/pagefold/blob/main/PRIVACY.md
