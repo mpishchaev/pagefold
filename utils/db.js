@@ -1,11 +1,11 @@
 /**
- * OpenFullPage - IndexedDB Storage Manager
+ * Pagefold - IndexedDB Storage Manager
  * Stores captures locally without quota limits
  */
 
 import { blobToDataURL } from './stitcher.js';
 
-const DB_NAME = 'OpenFullPageDB';
+const DB_NAME = 'PagefoldDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'captures';
 

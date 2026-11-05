@@ -1,7 +1,7 @@
 {
-  "name": "chrome-screen-plugin",
+  "name": "pagefold",
   "version": "1.0.0",
-  "description": "",
+  "description": "Full-page screenshots for Chrome, with an editor and PDF export",
   "main": "index.js",
   "scripts": {
     "test": "node tests/test_extension.js",

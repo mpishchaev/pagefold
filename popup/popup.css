@@ -1,4 +1,4 @@
-/* OpenFullPage - Popup Modern Styling */
+/* Pagefold - Popup Modern Styling */
 
 :root {
   --bg-primary: #0F172A;
@@ -276,4 +276,11 @@ body {
   gap: 6px;
   font-size: 10.5px;
   color: var(--text-muted);
+  margin: 0;
+}
+
+.privacy-note a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }

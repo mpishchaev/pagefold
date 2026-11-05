@@ -1,10 +1,10 @@
 {
   "extensionName": {
-    "message": "OpenFullPage - Full Page Screenshot & Editor",
+    "message": "Pagefold: Full Page Screenshot & Editor",
     "description": "The extension name"
   },
   "extensionDescription": {
-    "message": "100% Free & Local full-page screen capture, crop, annotation, PDF and image export with zero paywalls or tracking.",
+    "message": "Capture a whole web page, an area or one element. Crop, annotate, blur and save as PNG, JPG, WebP or PDF. Free, no sign-up, no ads.",
     "description": "The extension description"
   },
   "captureFullPage": {

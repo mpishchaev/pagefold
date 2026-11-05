@@ -1,10 +1,10 @@
 {
   "extensionName": {
-    "message": "OpenFullPage - Снимок всей страницы и редактор",
+    "message": "Pagefold: скриншот всей страницы и редактор",
     "description": "The extension name"
   },
   "extensionDescription": {
-    "message": "100% бесплатный и локальный плагин создания скриншотов всей страницы, обрезки, аннотаций, экспорта в PDF/PNG без ограничений и платных функций.",
+    "message": "Скриншот всей страницы, области или элемента. Обрезка, пометки, размытие, PNG, JPG и PDF. Бесплатно, без регистрации и рекламы.",
     "description": "The extension description"
   },
   "captureFullPage": {

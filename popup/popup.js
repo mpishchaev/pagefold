@@ -1,5 +1,5 @@
 /**
- * OpenFullPage - Popup Script
+ * Pagefold - Popup Script
  */
 
 import { getSettings, saveSettings, getDebugLogText } from '../utils/storage.js';

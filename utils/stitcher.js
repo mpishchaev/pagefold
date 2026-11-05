@@ -1,5 +1,5 @@
 /**
- * OpenFullPage - Canvas Stitcher Engine
+ * Pagefold - Canvas Stitcher Engine
  * Stitches multiple viewport screenshots into a single seamless image.
  * Compatible with OffscreenCanvas (Service Worker) and HTML5 Canvas (DOM).
  */

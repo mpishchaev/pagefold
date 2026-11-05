@@ -1,5 +1,5 @@
 /**
- * OpenFullPage - Extension Verification & Integrity Test Suite
+ * Pagefold - Extension Verification & Integrity Test Suite
  */
 
 import fs from 'fs';

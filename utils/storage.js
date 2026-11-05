@@ -1,5 +1,5 @@
 /**
- * OpenFullPage - Storage & Settings Utility
+ * Pagefold - Storage & Settings Utility
  * 100% Local & Privacy-Friendly
  */
 
@@ -30,7 +30,7 @@ export async function getSettings() {
       });
     } else {
       try {
-        const stored = localStorage.getItem('openfullpage_settings');
+        const stored = localStorage.getItem('pagefold_settings');
         resolve(stored ? { ...DEFAULT_SETTINGS, ...JSON.parse(stored) } : { ...DEFAULT_SETTINGS });
       } catch (e) {
         resolve({ ...DEFAULT_SETTINGS });
@@ -53,7 +53,7 @@ export async function saveSettings(partial) {
       });
     } else {
       try {
-        localStorage.setItem('openfullpage_settings', JSON.stringify(updated));
+        localStorage.setItem('pagefold_settings', JSON.stringify(updated));
       } catch (e) {}
       resolve(updated);
     }

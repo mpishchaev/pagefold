@@ -1,5 +1,5 @@
 /**
- * OpenFullPage - Gallery & History Manager
+ * Pagefold - Gallery & History Manager
  */
 
 import { getAllCaptures, deleteCapture, clearAllCaptures, getStorageUsage } from '../utils/db.js';

@@ -1,5 +1,5 @@
 /**
- * OpenFullPage - PDF Export Engine
+ * Pagefold - PDF Export Engine
  * Generates single-page continuous or multi-page A4/Letter PDFs locally
  * Uses bundled jsPDF without external dependencies.
  */

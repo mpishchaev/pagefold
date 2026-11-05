@@ -1,5 +1,5 @@
 /**
- * OpenFullPage - Background Service Worker (Manifest V3)
+ * Pagefold - Background Service Worker (Manifest V3)
  * Handles capture coordination, stitching, keyboard shortcuts,
  * context menus, and storage management.
  */
@@ -42,7 +42,7 @@ function notifyError(message) {
   chrome.notifications.create({
     type: 'basic',
     iconUrl: chrome.runtime.getURL('icons/icon48.png'),
-    title: 'OpenFullPage',
+    title: 'Pagefold',
     message
   });
 }
@@ -428,7 +428,7 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: 'openfp_parent',
-      title: '📸 OpenFullPage Screenshot',
+      title: '📸 Pagefold Screenshot',
       contexts: ['page', 'selection', 'image', 'link']
     });
 

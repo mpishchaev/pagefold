@@ -1,5 +1,5 @@
 /**
- * OpenFullPage - Content Script
+ * Pagefold - Content Script
  * Coordinates page metrics, iframe inspection & scrolling, sticky element suppression,
  * visual capture progress HUD, and area/element snipping tools.
  */
@@ -84,9 +84,9 @@
    * Helper to ensure overlay stylesheet is loaded
    */
   function ensureStyles() {
-    if (!document.getElementById('openfullpage-style')) {
+    if (!document.getElementById('pagefold-style')) {
       const link = document.createElement('link');
-      link.id = 'openfullpage-style';
+      link.id = 'pagefold-style';
       link.rel = 'stylesheet';
       link.href = chrome.runtime.getURL('content/overlay.css');
       (document.head || document.documentElement).appendChild(link);
@@ -325,7 +325,7 @@
       const all = document.querySelectorAll('*');
       for (let i = 0; i < all.length; i++) {
         const el = all[i];
-        if (el.id === 'openfullpage-hud' || el.closest('#openfullpage-hud')) continue;
+        if (el.id === 'pagefold-hud' || el.closest('#pagefold-hud')) continue;
         if (keep.has(el) || (except && except.contains(el))) continue;
 
         const style = window.getComputedStyle(el);
@@ -379,7 +379,7 @@
     if (!isTopFrame || hudElement) return;
 
     hudElement = document.createElement('div');
-    hudElement.id = 'openfullpage-hud';
+    hudElement.id = 'pagefold-hud';
     hudElement.innerHTML = `
       <div class="openfp-icon">📸</div>
       <div class="openfp-text">Capturing page...</div>
@@ -422,9 +422,9 @@
    * smooth scrolling so a scroll has landed by the time the screenshot fires.
    */
   function injectCaptureStyles() {
-    if (document.getElementById('openfullpage-scrollbar-killer')) return;
+    if (document.getElementById('pagefold-scrollbar-killer')) return;
     const scrollbarKiller = document.createElement('style');
-    scrollbarKiller.id = 'openfullpage-scrollbar-killer';
+    scrollbarKiller.id = 'pagefold-scrollbar-killer';
     scrollbarKiller.textContent = `
       ::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
       * { scrollbar-width: none !important; -ms-overflow-style: none !important; scroll-behavior: auto !important; }
@@ -438,11 +438,11 @@
    */
   function showStatus(text, isError) {
     clearTimeout(statusTimer);
-    document.getElementById('openfullpage-status')?.remove();
+    document.getElementById('pagefold-status')?.remove();
     if (!text) return;
 
     const status = document.createElement('div');
-    status.id = 'openfullpage-status';
+    status.id = 'pagefold-status';
     status.classList.toggle('openfp-status-error', isError);
     status.textContent = text;
     document.documentElement.appendChild(status);
@@ -567,7 +567,7 @@
     window.scrollTo({ left: origScrollX, top: origScrollY, behavior: 'instant' });
 
     // Remove scrollbar killer style
-    const killer = document.getElementById('openfullpage-scrollbar-killer');
+    const killer = document.getElementById('pagefold-scrollbar-killer');
     if (killer && killer.parentNode) {
       killer.parentNode.removeChild(killer);
     }
@@ -634,17 +634,17 @@
     }
 
     selectOverlayElement = document.createElement('div');
-    selectOverlayElement.id = 'openfullpage-select-overlay';
+    selectOverlayElement.id = 'pagefold-select-overlay';
 
     const box = document.createElement('div');
-    box.id = 'openfullpage-select-box';
+    box.id = 'pagefold-select-box';
 
     const badge = document.createElement('div');
-    badge.id = 'openfullpage-select-badge';
+    badge.id = 'pagefold-select-badge';
     badge.textContent = '0 × 0 px';
 
     const actions = document.createElement('div');
-    actions.id = 'openfullpage-select-actions';
+    actions.id = 'pagefold-select-actions';
     actions.innerHTML = `
       <button class="openfp-btn-action openfp-btn-confirm" id="openfp-area-confirm">✔ Capture</button>
       <button class="openfp-btn-action openfp-btn-cancel" id="openfp-area-cancel">✖ Cancel</button>
@@ -677,7 +677,7 @@
     };
 
     selectOverlayElement.addEventListener('mousedown', (e) => {
-      if (e.target.closest('#openfullpage-select-actions')) return;
+      if (e.target.closest('#pagefold-select-actions')) return;
       isSelecting = true;
       startX = e.clientX;
       startY = e.clientY;
@@ -1008,17 +1008,17 @@
     if (elementHighlighter) return;
 
     const shield = document.createElement('div');
-    shield.id = 'openfullpage-element-shield';
+    shield.id = 'pagefold-element-shield';
 
     elementHighlighter = document.createElement('div');
-    elementHighlighter.id = 'openfullpage-element-highlighter';
+    elementHighlighter.id = 'pagefold-element-highlighter';
 
     const badge = document.createElement('div');
-    badge.id = 'openfullpage-element-badge';
+    badge.id = 'pagefold-element-badge';
     elementHighlighter.appendChild(badge);
 
     const banner = document.createElement('div');
-    banner.id = 'openfullpage-element-banner';
+    banner.id = 'pagefold-element-banner';
     banner.innerHTML = `
       <span>Click an element to capture it</span>
       <span class="openfp-kbd">↑ ↓ parent / child</span>

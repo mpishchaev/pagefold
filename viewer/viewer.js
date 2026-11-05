@@ -1,5 +1,5 @@
 /**
- * OpenFullPage - Main Viewer & Editor Controller
+ * Pagefold - Main Viewer & Editor Controller
  */
 
 import { getSettings, saveSettings, formatFilename } from '../utils/storage.js';

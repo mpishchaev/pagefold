@@ -1,5 +1,5 @@
 /**
- * OpenFullPage - End-to-end capture tests in real Chromium
+ * Pagefold - End-to-end capture tests in real Chromium
  *
  * Loads a copy of the extension and checks captured images pixel by pixel.
  * The copy gets <all_urls>, because a toolbar click (activeTab) cannot be automated.
@@ -159,7 +159,7 @@ const scenarios = {
     await p.waitForTimeout(200);
     const x = await p.evaluate(() => document.getElementById('dlg').getBoundingClientRect().left + 10);
     await p.mouse.move(x, 300); await p.waitForTimeout(120);
-    const label = await p.evaluate(() => document.getElementById('openfullpage-element-badge').textContent);
+    const label = await p.evaluate(() => document.getElementById('pagefold-element-badge').textContent);
     check('drawer: dialog picked on its padding', /600 × 600/.test(label) || S !== 1, label);
     await p.mouse.click(x, 300);
     const img = await latestAfter(n);
@@ -198,7 +198,7 @@ const scenarios = {
     const n = await count();
     await sw.evaluate(async (t) => { await self.__openfp.startSelectElement(t); }, await tabId(base + '/modal'));
     await p.waitForTimeout(200);
-    const badge = () => p.evaluate(() => document.getElementById('openfullpage-element-badge').textContent);
+    const badge = () => p.evaluate(() => document.getElementById('pagefold-element-badge').textContent);
     const x = await p.evaluate(() => document.getElementById('dlg').getBoundingClientRect().left + 15);
     await p.mouse.move(x, 20); await p.waitForTimeout(120);
     const onDialog = await badge();
@@ -219,7 +219,7 @@ const scenarios = {
     await p.waitForTimeout(200);
     const r = await p.evaluate(() => { const b = document.getElementById('inner').getBoundingClientRect(); return [b.left + 50, b.top + 50]; });
     await p.mouse.move(...r); await p.waitForTimeout(120);
-    const label = await p.evaluate(() => document.getElementById('openfullpage-element-badge')?.textContent);
+    const label = await p.evaluate(() => document.getElementById('pagefold-element-badge')?.textContent);
     check('dialog: element inside modal <dialog> highlighted', /300 × 150/.test(label || ''), label);
     await p.mouse.click(...r);
     const img = await latestAfter(n);
@@ -341,9 +341,9 @@ const scenarios = {
     await p.mouse.wheel(0, 250); await p.waitForTimeout(250);
     const top = await p.evaluate(() => document.getElementById('m').scrollTop);
     check('wheel: scrolls inner container through shield', Math.abs(top - 250) < 1, `scrollTop=${top}`);
-    const r = await p.evaluate(() => document.getElementById('openfullpage-element-badge').textContent);
+    const r = await p.evaluate(() => document.getElementById('pagefold-element-badge').textContent);
     await p.keyboard.press('Escape');
-    const left = await p.evaluate(() => document.querySelectorAll('[id^=openfullpage-element]').length);
+    const left = await p.evaluate(() => document.querySelectorAll('[id^=pagefold-element]').length);
     check('wheel: ESC removes all inspector UI', left === 0, `${r} left=${left}`);
     await p.close();
   },
@@ -385,7 +385,7 @@ const scenarios = {
       check('tall: bands in right place (smooth-scroll page)', s > 0.98, `score=${s}`);
     }
     await p.waitForTimeout(150);
-    check('tall: page state restored', (await p.evaluate(() => !document.getElementById('openfullpage-hud') && !document.getElementById('openfullpage-status'))));
+    check('tall: page state restored', (await p.evaluate(() => !document.getElementById('pagefold-hud') && !document.getElementById('pagefold-status'))));
     await p.close();
   },
   async fullSpa() {
@@ -407,8 +407,8 @@ const scenarios = {
     await sw.evaluate(async (t) => { await self.__openfp.startSelectElement(t); }, await tabId(base + '/el'));
     await p.waitForTimeout(200);
     const hl = () => p.evaluate(() => {
-      const h = document.getElementById('openfullpage-element-highlighter');
-      if (!h) return null; const b = document.getElementById('openfullpage-element-badge');
+      const h = document.getElementById('pagefold-element-highlighter');
+      if (!h) return null; const b = document.getElementById('pagefold-element-badge');
       return { top: parseFloat(h.style.top), h: parseFloat(h.style.height), w: parseFloat(h.style.width), label: b.textContent };
     });
     await p.mouse.move(100, 100); await p.waitForTimeout(120);
@@ -419,7 +419,7 @@ const scenarios = {
     const c = await hl(); check('hover: cross-origin iframe selectable', /iframe/.test(c?.label || '') && c?.top !== b?.top, JSON.stringify(c));
     await p.mouse.move(100, 100); await p.waitForTimeout(100);
     await p.mouse.wheel(0, 60); await p.waitForTimeout(250);
-    const d = await p.evaluate(() => { const h = document.getElementById('openfullpage-element-highlighter'); return { t: h.getBoundingClientRect().top, r: document.getElementById('same').getBoundingClientRect().top, y: scrollY }; });
+    const d = await p.evaluate(() => { const h = document.getElementById('pagefold-element-highlighter'); return { t: h.getBoundingClientRect().top, r: document.getElementById('same').getBoundingClientRect().top, y: scrollY }; });
     check('hover: highlight tracks element under cursor after scroll', d.y === 60 && d.t === d.r, JSON.stringify(d));
     await p.keyboard.press('Escape');
     await p.close();
@@ -447,7 +447,7 @@ const scenarios = {
     // climb from a band to its parent #card
     await p.mouse.move(500, 300); await p.waitForTimeout(120);
     await p.keyboard.press('ArrowUp'); await p.waitForTimeout(80);
-    const label = await p.evaluate(() => document.getElementById('openfullpage-element-badge')?.textContent);
+    const label = await p.evaluate(() => document.getElementById('pagefold-element-badge')?.textContent);
     await p.mouse.click(500, 300);
     const img = await latestAfter(n);
     check('tall el: captured', !!img, `${label} ${lbl}`);

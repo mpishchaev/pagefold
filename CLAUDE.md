@@ -1,6 +1,6 @@
-# OpenFullPage
+# Pagefold
 
-Chrome extension (Manifest V3): free, fully local alternative to GoFullPage. Plain ES modules with no build step; load the repo root via "Load unpacked". User docs are in `README.md`.
+Chrome extension (Manifest V3): full-page screenshots with an editor and PDF export; captures stay in the browser (IndexedDB). Part of Morlov. Plain ES modules with no build step; load the repo root via "Load unpacked". User docs are in `README.md`.
 
 ## Commands
 
@@ -25,4 +25,4 @@ Run the e2e suite after touching `background/`, `content/` or `utils/stitcher.js
 - Use the `y` the page reports after scrolling, never the requested one.
 - A wrapper of the capture target must not be hidden as "fixed" (SPAs put the whole app in a fixed root).
 - `iframe.contentDocument` returns `null` for cross-origin frames rather than throwing.
-- The element picker relies on `#openfullpage-element-shield` taking all pointer events; hit testing briefly disables it.
+- The element picker relies on `#pagefold-element-shield` taking all pointer events; hit testing briefly disables it.

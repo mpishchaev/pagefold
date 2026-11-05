@@ -1,6 +1,6 @@
 /**
- * OpenFullPage - In-Browser Photo & Screenshot Editor
- * 100% Free - Includes all premium GoFullPage features:
+ * Pagefold - In-Browser Photo & Screenshot Editor
+ * Tools:
  * Crop, Redact/Pixelate, Arrows, Shapes, Text, Step Numbers, Highlighter, Pen.
  */
 
