@@ -5,7 +5,7 @@ Chrome extension (Manifest V3): full-page screenshots with an editor and PDF exp
 ## Commands
 
 - `npm test`: static checks (files, manifest, locales, auto-crop logic). Says nothing about whether capture works.
-- `npm run test:e2e [-- filter]`: real capture in Chromium with pixel checks. Needs env `PLAYWRIGHT_CORE` (playwright-core dir) and `CHROMIUM` (chrome.exe). `SCALE=1.25` runs at a real fractional scale; use it for any stitching change.
+- `npm run test:e2e [-- filter]`: real capture in Chromium with pixel checks. Needs env `PLAYWRIGHT_CORE` (playwright-core dir) and `CHROMIUM` (chrome.exe). `SCALE=1.25` runs at a real fractional scale; use it for any stitching change. `HUD_URL=https://morlov.app/` adds a check on a real page that the progress HUD stays out of the capture (run it after touching the HUD).
 
 Run the e2e suite after touching `background/`, `content/` or `utils/stitcher.js`.
 
