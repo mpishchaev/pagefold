@@ -6,11 +6,13 @@
   "scripts": {
     "test": "node tests/test_extension.js",
     "test:e2e": "node tests/e2e_capture.mjs",
+    "pack": "git archive -o pagefold.zip HEAD",
     "generate-icons": "node icons/generate_icons.js"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "UNLICENSED",
+  "private": true,
   "type": "module",
   "dependencies": {
     "jspdf": "^4.2.1"

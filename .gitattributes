@@ -1,0 +1,14 @@
+* text=auto eol=lf
+*.png binary
+
+# Left out of the Chrome Web Store zip (npm run pack)
+tests/ export-ignore
+store/ export-ignore
+icons/generate_icons.js export-ignore
+icons/icon.svg export-ignore
+package.json export-ignore
+package-lock.json export-ignore
+README.md export-ignore
+CLAUDE.md export-ignore
+.gitignore export-ignore
+.gitattributes export-ignore
