@@ -83,7 +83,7 @@ fs.writeFileSync(path.join(ext, 'manifest.json'), JSON.stringify(mf));
 fs.appendFileSync(path.join(ext, 'background/service_worker.js'),
   `\nimport { getAllCaptures as __gac, getCapture as __gc } from '../utils/db.js';
   import { saveCapture as __sc } from '../utils/db.js';
-  self.__openfp = { captureFullPage, startSelectElement, getAll: __gac, get: __gc, save: __sc };\n`);
+  self.__openfp = { captureFullPage, captureVisible, startSelectElement, getAll: __gac, get: __gc, save: __sc };\n`);
 
 const ctx = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(os.tmpdir(), 'openfp-prof-')), {
   executablePath: process.env.CHROMIUM, headless: true, viewport: S === 1 ? { width: 1000, height: 600 } : null,
@@ -113,7 +113,7 @@ const latestAfter = async (n, ms = 25000) => {
       const x = Math.round(bmp.width / 2) + Math.round(40 * S);
       for (let cy = 0; Math.round(cy * S) < bmp.height; cy += 10) { const i = (Math.round(cy * S) * bmp.width + x) * 4; px.push([d[i], d[i + 1], d[i + 2]]); }
       const lx = 20; const left = (20 * bmp.width + lx) * 4;
-      return { w: bmp.width, h: bmp.height, type: r.type, col: px, left: [d[left], d[left + 1], d[left + 2]], mid: (() => { const i = (Math.round(40 * S) * bmp.width + Math.round(bmp.width / 2)) * 4; return [d[i], d[i + 1], d[i + 2]]; })() };
+      return { w: bmp.width, h: bmp.height, dims: r.dimensions, type: r.type, col: px, left: [d[left], d[left + 1], d[left + 2]], mid: (() => { const i = (Math.round(40 * S) * bmp.width + Math.round(bmp.width / 2)) * 4; return [d[i], d[i + 1], d[i + 2]]; })() };
     }, [c[0], S]);
     await new Promise((r) => setTimeout(r, 250));
   }
@@ -386,6 +386,15 @@ const scenarios = {
     }
     await p.waitForTimeout(150);
     check('tall: page state restored', (await p.evaluate(() => !document.getElementById('pagefold-hud') && !document.getElementById('pagefold-status'))));
+    await p.close();
+  },
+  async visibleDims() {
+    const p = await open(base + '/tall');
+    const n = await count();
+    await sw.evaluate(async (t) => { self.__openfp.captureVisible(t); }, await tabId(base + '/tall'));
+    const img = await latestAfter(n);
+    check('visible: captured', !!img);
+    if (img) check('visible: size saved for history', img.dims?.width === img.w && img.dims?.height === img.h, JSON.stringify(img.dims));
     await p.close();
   },
   async liveHud() {

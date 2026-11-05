@@ -89,6 +89,17 @@ export async function createThumbnail(dataUrl, maxWidth = 260) {
   return dataUrl;
 }
 
+async function sizeOf(blob) {
+  try {
+    const bitmap = await createImageBitmap(blob);
+    const size = { width: bitmap.width, height: bitmap.height };
+    bitmap.close();
+    return size;
+  } catch (e) {
+    return { width: 0, height: 0 };
+  }
+}
+
 /**
  * Save a new capture to local IndexedDB
  */
@@ -114,7 +125,7 @@ export async function saveCapture(capture) {
     timestamp,
     title: capture.title || 'Untitled Screenshot',
     url: capture.url || '',
-    dimensions: capture.dimensions || { width: 0, height: 0 },
+    dimensions: capture.dimensions || await sizeOf(imageBlob),
     imageBlob,
     thumbnail: thumbnail || '',
     fileSize: imageBlob ? imageBlob.size : 0,
